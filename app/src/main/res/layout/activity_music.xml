@@ -2,7 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:background="#111111"
+    android:background="#1A1A1A"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -33,7 +33,8 @@
         android:layout_width="0dp"
         android:layout_height="220dp"
         android:layout_margin="16dp"
-        android:background="#222222"
+        android:background="@drawable/bg_walkman_body"
+
         app:layout_constraintEnd_toStartOf="@id/btnModeMusic"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
@@ -46,7 +47,9 @@
             android:layout_height="70dp"
             android:layout_marginStart="40dp"
             android:layout_marginTop="70dp"
-            android:background="#AAAAAA"/>
+            android:background="@drawable/reel"/>
+
+
 
         <!-- Reel derecho -->
         <ImageView
@@ -56,7 +59,7 @@
             android:layout_gravity="end"
             android:layout_marginEnd="40dp"
             android:layout_marginTop="70dp"
-            android:background="#AAAAAA"/>
+            android:background="@drawable/reel"/>
 
     </FrameLayout>
 
@@ -133,6 +136,7 @@
             android:layout_width="50dp"
             android:layout_height="50dp"
             android:background="@drawable/bg_circle"
+            android:backgroundTint="@color/walkman_yellow"
             android:src="@android:drawable/ic_media_play"
             app:layout_constraintTop_toTopOf="@id/btnBack"
             app:layout_constraintStart_toEndOf="@id/btnBack"

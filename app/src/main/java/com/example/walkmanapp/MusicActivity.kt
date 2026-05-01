@@ -152,7 +152,7 @@ class MusicActivity : AppCompatActivity() {
         }
 
         animRight = ObjectAnimator.ofFloat(reelRight, "rotation", 0f, -360f).apply {
-            duration = 1000
+            duration = 800
             repeatCount = ObjectAnimator.INFINITE
         }
     }
