@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.media.*
 import android.os.*
 import android.provider.MediaStore
+import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
@@ -15,6 +16,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.*
 import kotlin.concurrent.thread
+import kotlin.math.min
 
 class RecordActivity : AppCompatActivity() {
 
@@ -37,6 +39,21 @@ class RecordActivity : AppCompatActivity() {
     private lateinit var switchReverse: Switch
     private lateinit var reversedFile: File
 
+    private lateinit var seekBarRecord: SeekBar
+    private lateinit var txtCurrentTimeRecord: TextView
+    private lateinit var txtDurationRecord: TextView
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var runnable: Runnable? = null
+
+    private var recordStartTime = 0L
+    private var recordRunnable: Runnable? = null
+
+    private var isUserTouching = false
+
+    private lateinit var scrollView: HorizontalScrollView
+    private lateinit var waveformView: WaveformView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_record)
@@ -46,6 +63,21 @@ class RecordActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btnSave)
         btnModeMusic = findViewById(R.id.btnModeMusic)
         txtRecording = findViewById(R.id.txtRecording)
+
+        seekBarRecord = findViewById(R.id.seekBarRecord)
+        txtCurrentTimeRecord = findViewById(R.id.txtCurrentTimeRecord)
+        txtDurationRecord = findViewById(R.id.txtDurationRecord)
+
+        waveformView = findViewById(R.id.waveformView)
+        scrollView = findViewById(R.id.waveScroll)
+
+        seekBarRecord.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) player?.seekTo(progress)
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
 
         wavFile = File(cacheDir, "audio.wav")
 
@@ -72,6 +104,15 @@ class RecordActivity : AppCompatActivity() {
             saveAudio()
         }
 
+        scrollView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> isUserTouching = true
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> isUserTouching = false
+            }
+            false
+        }
+
         switchReverse = findViewById(R.id.swReverse)
         reversedFile = File(cacheDir, "audio_reverse.wav")
 
@@ -79,8 +120,15 @@ class RecordActivity : AppCompatActivity() {
             player?.release()
             player = null
             isPlaying = false
+            seekBarRecord.progress = 0
+            txtCurrentTimeRecord.text = "00:00"
             btnPlay.setImageResource(android.R.drawable.ic_media_play)
         }
+    }
+
+    private fun formatTime(ms: Int): String {
+        val sec = ms / 1000
+        return String.format("%02d:%02d", sec / 60, sec % 60)
     }
 
     private fun reverseAudio(): File {
@@ -112,9 +160,28 @@ class RecordActivity : AppCompatActivity() {
         if (wavFile.exists()) wavFile.delete()
     }
 
+    private fun clearReversedAudio() {
+        if (reversedFile.exists()) reversedFile.delete()
+    }
+
     private fun startRecording() {
 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+
+            Toast.makeText(this, "Permiso de micrófono requerido", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        waveformView.clear()
         clearAudio()
+        clearReversedAudio()
+
+        // reset UI
+        txtCurrentTimeRecord.text = "00:00"
+        txtDurationRecord.text = "00:00"
+        seekBarRecord.progress = 0
+        seekBarRecord.max = 0
 
         // resetear reproducción previa
         player?.release()
@@ -139,8 +206,10 @@ class RecordActivity : AppCompatActivity() {
         isRecordingThread = true
         isRecording = true
         btnRecord.setImageResource(R.drawable.ic_stop)
-
         txtRecording.visibility = View.VISIBLE
+
+        recordStartTime = System.currentTimeMillis()
+        startRecordTimer()
 
         thread { writeFile(bufferSize) }
     }
@@ -154,11 +223,33 @@ class RecordActivity : AppCompatActivity() {
 
         isRecording = false
         txtRecording.visibility = View.GONE
+
+        stopRecordTimer()
+
+        val duration = (System.currentTimeMillis() - recordStartTime).toInt()
+        txtDurationRecord.text = formatTime(duration)
+        seekBarRecord.max = duration
+    }
+
+    private fun startRecordTimer() {
+        recordRunnable = object : Runnable {
+            override fun run() {
+                val elapsed = System.currentTimeMillis() - recordStartTime
+
+                txtCurrentTimeRecord.text = formatTime(elapsed.toInt())
+
+                handler.postDelayed(this, 500)
+            }
+        }
+        handler.post(recordRunnable!!)
+    }
+
+    private fun stopRecordTimer() {
+        recordRunnable?.let { handler.removeCallbacks(it) }
     }
 
     private fun writeFile(bufferSize: Int) {
         val file = RandomAccessFile(wavFile, "rw")
-
         writeWavHeader(file)
 
         val buffer = ByteArray(bufferSize)
@@ -169,6 +260,30 @@ class RecordActivity : AppCompatActivity() {
             if (read > 0) {
                 file.write(buffer, 0, read)
                 total += read
+                // calcular amplitud REAL
+                var maxAmp = 0
+                var i = 0
+
+                while (i < read - 1) {
+                    val value = (buffer[i].toInt() or (buffer[i + 1].toInt() shl 8)).toShort()
+                    val absValue = kotlin.math.abs(value.toInt())
+
+                    if (absValue > maxAmp) maxAmp = absValue
+
+                    i += 2
+                }
+
+                val normalized = min(1f, maxAmp / 32767f)
+
+                runOnUiThread {
+                    waveformView.addAmplitude(normalized)
+
+                    if (!isUserTouching) {
+                        scrollView.post {
+                            scrollView.scrollTo(waveformView.width, 0)
+                        }
+                    }
+                }
             }
         }
 
@@ -205,7 +320,10 @@ class RecordActivity : AppCompatActivity() {
         }
 
         val file = if (switchReverse.isChecked) {
-            reverseAudio()
+            if (!reversedFile.exists()) {
+                reverseAudio()
+            }
+            reversedFile
         } else {
             wavFile
         }
@@ -215,18 +333,40 @@ class RecordActivity : AppCompatActivity() {
             player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 prepare()
-                start()
             }
 
+            seekBarRecord.max = player!!.duration
+            txtDurationRecord.text = formatTime(player!!.duration)
+
+            handler.postDelayed({
+                seekBarRecord.max = player!!.duration
+            }, 200)
+
+            player?.start()
             isPlaying = true
+            startSeekBarUpdater()
             btnPlay.setImageResource(android.R.drawable.ic_media_pause)
 
-            // resetear cuando termina
+            runnable = object : Runnable {
+                override fun run() {
+                    if (player != null && isPlaying) {
+                        val pos = player!!.currentPosition.coerceAtMost(player!!.duration)
+                        seekBarRecord.progress = pos
+                        txtCurrentTimeRecord.text = formatTime(pos)
+                        handler.postDelayed(this, 200)
+                    }
+                }
+            }
+            handler.post(runnable!!)
+
             player?.setOnCompletionListener {
                 it.release()
                 player = null
                 isPlaying = false
                 btnPlay.setImageResource(android.R.drawable.ic_media_play)
+                seekBarRecord.progress = 0
+                txtCurrentTimeRecord.text = "00:00"
+                runnable?.let { r -> handler.removeCallbacks(r) }
             }
 
         } else {
@@ -240,6 +380,20 @@ class RecordActivity : AppCompatActivity() {
                 btnPlay.setImageResource(android.R.drawable.ic_media_pause)
             }
         }
+    }
+
+    private fun startSeekBarUpdater() {
+        runnable = object : Runnable {
+            override fun run() {
+                player?.let {
+                    val pos = it.currentPosition
+                    seekBarRecord.progress = pos
+                    txtCurrentTimeRecord.text = formatTime(pos)
+                }
+                handler.postDelayed(this, 200)
+            }
+        }
+        handler.post(runnable!!)
     }
 
     private fun saveAudio() {
@@ -290,5 +444,6 @@ class RecordActivity : AppCompatActivity() {
         super.onDestroy()
         player?.release()
         clearAudio()
+        runnable?.let { handler.removeCallbacks(it) }
     }
 }
