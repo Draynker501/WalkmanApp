@@ -51,6 +51,8 @@ class RecordActivity : AppCompatActivity() {
 
     private var isUserTouching = false
 
+    private lateinit var btnModeRecord: Button
+
     private lateinit var scrollView: HorizontalScrollView
     private lateinit var waveformView: WaveformView
 
@@ -70,6 +72,8 @@ class RecordActivity : AppCompatActivity() {
 
         waveformView = findViewById(R.id.waveformView)
         scrollView = findViewById(R.id.waveScroll)
+
+        btnModeRecord = findViewById(R.id.btnModeRecord)
 
         seekBarRecord.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -124,6 +128,20 @@ class RecordActivity : AppCompatActivity() {
             txtCurrentTimeRecord.text = "00:00"
             btnPlay.setImageResource(android.R.drawable.ic_media_play)
         }
+
+        // Simular que el botón está presionado por estar en RecordActivity
+        btnModeRecord.post {
+            btnModeRecord.animate()
+                .translationX(-25f) // se mete hacia adentro
+                .setDuration(120)
+                .start()
+
+            val params = btnModeRecord.layoutParams
+            params.width = dpToPx(28)
+            btnModeRecord.layoutParams = params
+        }
+
+        btnModeRecord.isSelected = true
     }
 
     private fun formatTime(ms: Int): String {
@@ -445,5 +463,9 @@ class RecordActivity : AppCompatActivity() {
         player?.release()
         clearAudio()
         runnable?.let { handler.removeCallbacks(it) }
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
     }
 }
