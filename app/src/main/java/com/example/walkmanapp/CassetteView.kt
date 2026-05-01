@@ -44,24 +44,53 @@ class CassetteView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val cxLeft = width * 0.25f
-        val cxRight = width * 0.75f
-        val cy = height * 0.5f
+        val cx = width * 0.5f
 
         val baseRadius = 60f
 
         val minThickness = 10f
         val maxThickness = 40f
 
-        val windowWidth = width * 0.30f
-        val windowHeight = height * 0.26f
-
-        val rectLeft = (width / 2) - (windowWidth / 2)
-        val rectTop = cy - (windowHeight / 2)
+        val windowWidth = width * 0.20f
+        val windowHeight = height * 0.30f
 
         val paintWindow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
         }
+
+        // Fondo de la base
+        val bodyWidth = width * 0.28f
+        val bodyHeight = height * 0.60f
+
+        val bodyLeft = (width / 2) - (bodyWidth / 2)
+        val bodyTop = (height / 2) - (bodyHeight / 2)
+        val bodyRight = bodyLeft + bodyWidth
+        val bodyBottom = bodyTop + bodyHeight
+
+        val paintBody = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#2A2A2A") // gris oscuro bonito
+        }
+
+        canvas.drawRoundRect(
+            bodyLeft,
+            bodyTop,
+            bodyRight,
+            bodyBottom,
+            20f,
+            20f,
+            paintBody
+        )
+
+        val bodyCenterY = (bodyTop + bodyBottom) / 2f
+
+        val reelSpacing = bodyHeight * 0.38f
+
+        val cyTop = bodyCenterY - reelSpacing
+        val cyBottom = bodyCenterY + reelSpacing
+
+        val rectLeft = (width / 2) - (windowWidth / 2)
+        val centerY = (cyTop + cyBottom) / 2f
+        val rectTop = centerY - (windowHeight / 2)
 
         canvas.drawRoundRect(
             rectLeft,
@@ -73,23 +102,23 @@ class CassetteView @JvmOverloads constructor(
             paintWindow
         )
 
-        val leftThickness = maxThickness - (progress * (maxThickness - minThickness))
-        val rightThickness = minThickness + (progress * (maxThickness - minThickness))
+        val bottomThickness = maxThickness - (progress * (maxThickness - minThickness))
+        val topThickness = minThickness + (progress * (maxThickness - minThickness))
 
-        // Reel izquierdo
-        paintReel.strokeWidth = leftThickness
-        canvas.drawCircle(cxLeft, cy, baseRadius, paintReel)
+        // Reel inferior
+        paintReel.strokeWidth = bottomThickness
+        canvas.drawCircle(cx, cyBottom, baseRadius, paintReel)
 
         // Reel derecho
-        paintReel.strokeWidth = rightThickness
-        canvas.drawCircle(cxRight, cy, baseRadius, paintReel)
+        paintReel.strokeWidth = topThickness
+        canvas.drawCircle(cx, cyTop, baseRadius, paintReel)
 
         // Centros
-        canvas.drawCircle(cxLeft, cy, 55f, paintCenter)
-        canvas.drawCircle(cxRight, cy, 55f, paintCenter)
+        canvas.drawCircle(cx, cyBottom, 55f, paintCenter)
+        canvas.drawCircle(cx, cyTop, 55f, paintCenter)
 
-        drawTeeth(canvas, cxLeft, cy, angleLeft)
-        drawTeeth(canvas, cxRight, cy, angleRight)
+        drawTeeth(canvas, cx, cyBottom, angleLeft)
+        drawTeeth(canvas, cx, cyTop, angleRight)
     }
 
     private fun drawTeeth(canvas: Canvas, cx: Float, cy: Float, angle: Float) {

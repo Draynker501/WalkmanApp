@@ -6,37 +6,41 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Botón MODO MÚSICA -->
-    <Button
-        android:id="@+id/btnModeMusic"
-        android:layout_width="40dp"
-        android:layout_height="120dp"
-        android:text="M"
-        android:backgroundTint="#00AAFF"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/btnModeRecord"/>
-
-    <!-- Botón MODO RECORD -->
-    <Button
-        android:id="@+id/btnModeRecord"
-        android:layout_width="40dp"
-        android:layout_height="120dp"
-        android:text="R"
-        android:backgroundTint="#444444"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/btnModeMusic"/>
-
     <!-- CASSETTE SIMULADO -->
     <com.example.walkmanapp.CassetteView
         android:id="@+id/cassetteView"
         android:background="@drawable/bg_walkman_body"
-        android:layout_width="0dp"
-        android:layout_height="220dp"
+        android:layout_width="320dp"
+        android:layout_height="500dp"
         android:layout_margin="16dp"
-        app:layout_constraintEnd_toStartOf="@id/btnModeMusic"
+        android:elevation="10dp"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>
+
+    <!-- Botón MODO MÚSICA -->
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btnModeMusic"
+        android:layout_width="36dp"
+        android:layout_height="120dp"
+        android:background="@drawable/bg_side_button"
+        android:layout_marginTop="40dp"
+        android:layout_marginStart="-6dp"
+        app:layout_constraintStart_toEndOf="@id/cassetteView"
+        app:layout_constraintTop_toTopOf="parent"
+        />
+
+    <!-- Botón MODO RECORD -->
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btnModeRecord"
+        android:layout_width="30dp"
+        android:layout_height="120dp"
+        android:background="@drawable/bg_side_button"
+        android:layout_marginTop="2dp"
+        android:backgroundTint="@null"
+        android:layout_marginStart="-6dp"
+        app:layout_constraintStart_toEndOf="@id/cassetteView"
+        app:layout_constraintTop_toBottomOf="@id/btnModeMusic"/>
 
     <!-- Título -->
     <TextView

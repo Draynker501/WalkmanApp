@@ -6,6 +6,7 @@ import android.media.MediaPlayer
 import android.os.*
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.constraintlayout.widget.ConstraintLayout
 
 class MusicActivity : AppCompatActivity() {
 
@@ -31,6 +32,9 @@ class MusicActivity : AppCompatActivity() {
 
     private lateinit var cassetteView: CassetteView
 
+    private lateinit var btnModeMusic: Button
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_music)
@@ -47,6 +51,9 @@ class MusicActivity : AppCompatActivity() {
         txtDuration = findViewById(R.id.txtDuration)
 
         cassetteView = findViewById(R.id.cassetteView)
+
+        btnModeMusic = findViewById(R.id.btnModeMusic)
+
 
         initPlayer()
 
@@ -73,6 +80,20 @@ class MusicActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
+
+        // Simular que ESTE está presionado (porque estás en MusicActivity)
+        btnModeMusic.post {
+            btnModeMusic.animate()
+                .translationX(-25f) // se mete hacia adentro
+                .setDuration(120)
+                .start()
+
+            val params = btnModeMusic.layoutParams
+            params.width = dpToPx(28)
+            btnModeMusic.layoutParams = params
+        }
+
+        btnModeMusic.isSelected = true
     }
 
     private fun initPlayer() {
@@ -159,5 +180,18 @@ class MusicActivity : AppCompatActivity() {
         super.onDestroy()
         mediaPlayer?.release()
         stopSeekBar()
+    }
+
+    private fun updateSideButtons() {
+        val params = btnModeMusic.layoutParams as ConstraintLayout.LayoutParams
+
+        params.width = dpToPx(28) // más angosto
+        btnModeMusic.layoutParams = params
+
+        btnModeMusic.translationX = 8f // se “mete” hacia dentro
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
     }
 }
