@@ -10,7 +10,7 @@
     <com.example.walkmanapp.CassetteView
         android:id="@+id/cassetteView"
         android:background="@drawable/bg_walkman_body"
-        android:layout_width="320dp"
+        android:layout_width="300dp"
         android:layout_height="500dp"
         android:layout_margin="16dp"
         android:elevation="10dp"
