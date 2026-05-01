@@ -28,40 +28,15 @@
         app:layout_constraintTop_toBottomOf="@id/btnModeMusic"/>
 
     <!-- CASSETTE SIMULADO -->
-    <FrameLayout
-        android:id="@+id/cassetteContainer"
+    <com.example.walkmanapp.CassetteView
+        android:id="@+id/cassetteView"
+        android:background="@drawable/bg_walkman_body"
         android:layout_width="0dp"
         android:layout_height="220dp"
         android:layout_margin="16dp"
-        android:background="@drawable/bg_walkman_body"
-
         app:layout_constraintEnd_toStartOf="@id/btnModeMusic"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <!-- Reel izquierdo -->
-
-        <ImageView
-            android:id="@+id/reelLeft"
-            android:layout_width="70dp"
-            android:layout_height="70dp"
-            android:layout_marginStart="40dp"
-            android:layout_marginTop="70dp"
-            android:background="@drawable/reel"/>
-
-
-
-        <!-- Reel derecho -->
-        <ImageView
-            android:id="@+id/reelRight"
-            android:layout_width="70dp"
-            android:layout_height="70dp"
-            android:layout_gravity="end"
-            android:layout_marginEnd="40dp"
-            android:layout_marginTop="70dp"
-            android:background="@drawable/reel"/>
-
-    </FrameLayout>
+        app:layout_constraintTop_toTopOf="parent"/>
 
     <!-- Título -->
     <TextView
@@ -71,9 +46,9 @@
         android:text="mm_intro.mp3"
         android:textColor="#FFFFFF"
         android:textSize="16sp"
-        app:layout_constraintTop_toBottomOf="@id/cassetteContainer"
-        app:layout_constraintStart_toStartOf="@id/cassetteContainer"
-        app:layout_constraintEnd_toEndOf="@id/cassetteContainer"/>
+        app:layout_constraintTop_toBottomOf="@id/cassetteView"
+        app:layout_constraintStart_toStartOf="@id/cassetteView"
+        app:layout_constraintEnd_toEndOf="@id/cassetteView"/>
 
     <!-- Seekbar -->
     <SeekBar

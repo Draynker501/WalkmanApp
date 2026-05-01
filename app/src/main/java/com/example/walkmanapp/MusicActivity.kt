@@ -17,9 +17,6 @@ class MusicActivity : AppCompatActivity() {
     private lateinit var seekBar: SeekBar
     private lateinit var txtTitle: TextView
 
-    private lateinit var reelLeft: ImageView
-    private lateinit var reelRight: ImageView
-
     private var mediaPlayer: MediaPlayer? = null
     private var isPlaying = false
 
@@ -31,6 +28,8 @@ class MusicActivity : AppCompatActivity() {
 
     private lateinit var txtCurrentTime: TextView
     private lateinit var txtDuration: TextView
+
+    private lateinit var cassetteView: CassetteView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,14 +43,12 @@ class MusicActivity : AppCompatActivity() {
         seekBar = findViewById(R.id.seekBar)
         txtTitle = findViewById(R.id.txtTitle)
 
-        reelLeft = findViewById(R.id.reelLeft)
-        reelRight = findViewById(R.id.reelRight)
-
         txtCurrentTime = findViewById(R.id.txtCurrentTime)
         txtDuration = findViewById(R.id.txtDuration)
 
+        cassetteView = findViewById(R.id.cassetteView)
+
         initPlayer()
-        setupReelAnimation()
 
         btnPlayMusic.setOnClickListener {
             if (isPlaying) pauseMusic() else playMusic()
@@ -87,6 +84,7 @@ class MusicActivity : AppCompatActivity() {
 
         mediaPlayer?.setOnCompletionListener {
             isPlaying = false
+            cassetteView.setProgress(0f)
             btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
 
             stopSeekBar()
@@ -129,11 +127,14 @@ class MusicActivity : AppCompatActivity() {
             override fun run() {
                 if (player.isPlaying) {
                     val current = player.currentPosition
+                    val progress = current.toFloat() / player.duration
+                    cassetteView.setProgress(progress)
+                    cassetteView.updateRotation()
 
                     seekBar.progress = current
                     txtCurrentTime.text = formatTime(current)
 
-                    handler.postDelayed(this, 500)
+                    handler.postDelayed(this, 16)
                 }
             }
         }
@@ -142,19 +143,6 @@ class MusicActivity : AppCompatActivity() {
 
     private fun stopSeekBar() {
         updateRunnable?.let { handler.removeCallbacks(it) }
-    }
-
-    // 🎞️ ANIMACIÓN CINTA
-    private fun setupReelAnimation() {
-        animLeft = ObjectAnimator.ofFloat(reelLeft, "rotation", 0f, 360f).apply {
-            duration = 1000
-            repeatCount = ObjectAnimator.INFINITE
-        }
-
-        animRight = ObjectAnimator.ofFloat(reelRight, "rotation", 0f, -360f).apply {
-            duration = 800
-            repeatCount = ObjectAnimator.INFINITE
-        }
     }
 
     private fun startReels() {
