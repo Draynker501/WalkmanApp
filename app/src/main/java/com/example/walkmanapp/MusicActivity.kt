@@ -182,15 +182,6 @@ class MusicActivity : AppCompatActivity() {
         stopSeekBar()
     }
 
-    private fun updateSideButtons() {
-        val params = btnModeMusic.layoutParams as ConstraintLayout.LayoutParams
-
-        params.width = dpToPx(28) // más angosto
-        btnModeMusic.layoutParams = params
-
-        btnModeMusic.translationX = 8f // se “mete” hacia dentro
-    }
-
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
     }

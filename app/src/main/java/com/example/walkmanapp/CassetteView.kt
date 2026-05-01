@@ -18,18 +18,34 @@ class CassetteView @JvmOverloads constructor(
     private var angleLeft = 0f
     private var angleRight = 0f
 
+    private var isReversed = false
+
+    fun setReversed(value: Boolean) {
+        isReversed = value
+    }
+
     fun updateRotation() {
         val speedLeft = 2f + (progress * 6f)
         val speedRight = 8f - (progress * 6f)
 
-        angleLeft += speedLeft
-        angleRight -= speedRight
+        if (!isReversed) {
+            angleLeft += speedLeft
+            angleRight -= speedRight
+        } else {
+            // Invertido
+            angleLeft -= speedLeft
+            angleRight += speedRight
+        }
 
         invalidate()
     }
 
     fun setProgress(p: Float) {
-        progress = p.coerceIn(0f, 1f)
+        progress = if (!isReversed) {
+            p.coerceIn(0f, 1f)
+        } else {
+            (1f - p).coerceIn(0f, 1f)
+        }
         invalidate()
     }
 

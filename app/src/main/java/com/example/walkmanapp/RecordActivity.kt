@@ -56,6 +56,8 @@ class RecordActivity : AppCompatActivity() {
     private lateinit var scrollView: HorizontalScrollView
     private lateinit var waveformView: WaveformView
 
+    private lateinit var cassetteView: CassetteView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_record)
@@ -74,6 +76,8 @@ class RecordActivity : AppCompatActivity() {
         scrollView = findViewById(R.id.waveScroll)
 
         btnModeRecord = findViewById(R.id.btnModeRecord)
+
+        cassetteView = findViewById(R.id.cassetteView)
 
         seekBarRecord.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -121,6 +125,12 @@ class RecordActivity : AppCompatActivity() {
         reversedFile = File(cacheDir, "audio_reverse.wav")
 
         switchReverse.setOnCheckedChangeListener { _, isChecked ->
+            cassetteView.setReversed(isChecked)
+
+            cassetteView.setProgress(0f)
+
+            cassetteView.updateRotation()
+
             player?.release()
             player = null
             isPlaying = false
@@ -256,8 +266,12 @@ class RecordActivity : AppCompatActivity() {
 
                 txtCurrentTimeRecord.text = formatTime(elapsed.toInt())
 
-                handler.postDelayed(this, 500)
-            }
+                /* Por si quiero implementar un fake progress bar en la animación al grabar
+                val fakeProgress = (elapsed / 60000f).coerceIn(0f, 1f)
+                cassetteView.setProgress(fakeProgress)
+                cassetteView.updateRotation()
+                */
+                handler.postDelayed(this, 16)            }
         }
         handler.post(recordRunnable!!)
     }
@@ -371,7 +385,12 @@ class RecordActivity : AppCompatActivity() {
                         val pos = player!!.currentPosition.coerceAtMost(player!!.duration)
                         seekBarRecord.progress = pos
                         txtCurrentTimeRecord.text = formatTime(pos)
-                        handler.postDelayed(this, 200)
+
+                        val progress = pos.toFloat() / player!!.duration
+                        cassetteView.setProgress(progress)
+                        cassetteView.updateRotation()
+
+                        handler.postDelayed(this, 16)
                     }
                 }
             }
@@ -384,6 +403,7 @@ class RecordActivity : AppCompatActivity() {
                 btnPlay.setImageResource(android.R.drawable.ic_media_play)
                 seekBarRecord.progress = 0
                 txtCurrentTimeRecord.text = "00:00"
+                cassetteView.setProgress(0f)
                 runnable?.let { r -> handler.removeCallbacks(r) }
             }
 
