@@ -17,27 +17,28 @@ import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
+    // 🎵 MUSIC PLAYER
     private lateinit var btnPlayMusic: ImageButton
     private lateinit var btnBack: ImageButton
     private lateinit var btnForward: ImageButton
-
     private lateinit var seekBar: SeekBar
     private lateinit var txtCurrentTime: TextView
     private lateinit var txtDuration: TextView
     private lateinit var txtTitle: TextView
 
+    // 🎤 RECORD
     private lateinit var btnRecord: ImageButton
     private lateinit var btnPlayRecord: ImageButton
     private lateinit var btnSave: ImageButton
     private lateinit var switchReverse: Switch
     private lateinit var txtRecording: TextView
 
-    private var isRecording = false
     private lateinit var wavFile: File
     private lateinit var reversedFile: File
 
-    private var audioRecord: AudioRecord? = null
+    private var isRecording = false
     private var isRecordingThread = false
+    private var audioRecord: AudioRecord? = null
 
     private var recordedPlayer: MediaPlayer? = null
     private var isPlayingRecorded = false
@@ -67,29 +68,27 @@ class MainActivity : AppCompatActivity() {
         switchReverse = findViewById(R.id.swReverse)
         txtRecording = findViewById(R.id.txtRecording)
 
-        // Archivos
         wavFile = File(cacheDir, "audio.wav")
         reversedFile = File(cacheDir, "audio_reverse.wav")
 
-        // Inicializar música
+        // 🔥 LIMPIAR SIEMPRE AL INICIAR
+        clearTemporaryAudio()
+
         initMusicPlayer()
 
-        // 🎵 PLAY / PAUSE música
+        // 🎵 CONTROLES MÚSICA
         btnPlayMusic.setOnClickListener {
             if (isPlayingMusic) pauseMusic() else playMusic()
         }
 
-        // ⏪
         btnBack.setOnClickListener {
             mediaPlayer?.seekTo((mediaPlayer!!.currentPosition - 5000).coerceAtLeast(0))
         }
 
-        // ⏩
         btnForward.setOnClickListener {
             mediaPlayer?.seekTo(mediaPlayer!!.currentPosition + 5000)
         }
 
-        // Seek manual
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) mediaPlayer?.seekTo(progress)
@@ -98,7 +97,7 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
 
-        // Permiso micrófono
+        // 🎤 PERMISOS
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
@@ -108,7 +107,9 @@ class MainActivity : AppCompatActivity() {
             if (!isRecording) startRecording() else stopRecording()
         }
 
-        btnPlayRecord.setOnClickListener { toggleRecordedAudio() }
+        btnPlayRecord.setOnClickListener {
+            toggleRecordedAudio()
+        }
 
         switchReverse.setOnCheckedChangeListener { _, isChecked ->
             recordedPlayer?.release()
@@ -116,10 +117,14 @@ class MainActivity : AppCompatActivity() {
             isPlayingRecorded = false
             btnPlayRecord.setImageResource(android.R.drawable.ic_media_play)
 
-            if (isChecked) reverseAudio()
+            if (isChecked && wavFile.exists()) {
+                reverseAudio()
+            }
         }
 
-        btnSave.setOnClickListener { saveAudio() }
+        btnSave.setOnClickListener {
+            saveAudio()
+        }
     }
 
     // ================= MUSIC =================
@@ -129,8 +134,8 @@ class MainActivity : AppCompatActivity() {
         txtTitle.text = "mm_intro.mp3"
 
         mediaPlayer?.setOnCompletionListener {
-            btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
             isPlayingMusic = false
+            btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
             stopSeekBarUpdates()
         }
     }
@@ -177,7 +182,22 @@ class MainActivity : AppCompatActivity() {
 
     // ================= RECORD =================
 
+    private fun clearTemporaryAudio() {
+        if (wavFile.exists()) wavFile.delete()
+        if (reversedFile.exists()) reversedFile.delete()
+
+        recordedPlayer?.release()
+        recordedPlayer = null
+        isPlayingRecorded = false
+
+        btnPlayRecord.setImageResource(android.R.drawable.ic_media_play)
+    }
+
     private fun startRecording() {
+
+        // 🔥 limpiar antes de grabar nuevo
+        clearTemporaryAudio()
+
         val bufferSize = AudioRecord.getMinBufferSize(
             44100,
             AudioFormat.CHANNEL_IN_MONO,
@@ -257,14 +277,14 @@ class MainActivity : AppCompatActivity() {
         file.writeInt(0)
     }
 
-    // ================= RECORD PLAY =================
+    // ================= PLAY RECORD =================
 
     private fun toggleRecordedAudio() {
 
         val file = if (switchReverse.isChecked) reversedFile else wavFile
 
         if (!file.exists()) {
-            Toast.makeText(this, "No hay audio", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Primero graba un audio", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -300,6 +320,8 @@ class MainActivity : AppCompatActivity() {
     // ================= REVERSE =================
 
     private fun reverseAudio() {
+        if (!wavFile.exists()) return
+
         val bytes = wavFile.readBytes()
         val header = bytes.copyOfRange(0, 44)
         val data = bytes.copyOfRange(44, bytes.size)
@@ -325,7 +347,10 @@ class MainActivity : AppCompatActivity() {
     private fun saveAudio() {
 
         val source = if (switchReverse.isChecked) reversedFile else wavFile
-        if (!source.exists()) return
+        if (!source.exists()) {
+            Toast.makeText(this, "No hay audio", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         val input = EditText(this)
 
@@ -334,7 +359,9 @@ class MainActivity : AppCompatActivity() {
             .setView(input)
             .setPositiveButton("Guardar") { _, _ ->
 
-                val name = input.text.toString().ifEmpty { "audio_${System.currentTimeMillis()}" }
+                val name = input.text.toString().ifEmpty {
+                    "audio_${System.currentTimeMillis()}"
+                }
 
                 val values = ContentValues().apply {
                     put(MediaStore.Audio.Media.DISPLAY_NAME, "$name.wav")
@@ -348,6 +375,7 @@ class MainActivity : AppCompatActivity() {
                     contentResolver.openOutputStream(it)?.use { out ->
                         FileInputStream(source).copyTo(out)
                     }
+                    Toast.makeText(this, "Guardado en Música", Toast.LENGTH_LONG).show()
                 }
             }
             .show()
@@ -359,8 +387,5 @@ class MainActivity : AppCompatActivity() {
         recordedPlayer?.release()
         mediaPlayer?.release()
         stopSeekBarUpdates()
-
-        if (wavFile.exists()) wavFile.delete()
-        if (reversedFile.exists()) reversedFile.delete()
     }
 }
