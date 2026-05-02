@@ -58,6 +58,8 @@ class RecordActivity : AppCompatActivity() {
 
     private lateinit var cassetteView: CassetteView
 
+    private var lastProgress = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_record)
@@ -80,10 +82,35 @@ class RecordActivity : AppCompatActivity() {
         cassetteView = findViewById(R.id.cassetteView)
 
         seekBarRecord.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) player?.seekTo(progress)
+                if (fromUser) {
+                    player?.seekTo(progress)
+
+                    // actualizar tiempo
+                    txtCurrentTimeRecord.text = formatTime(progress)
+
+                    // actualizar cassette
+                    val duration = player?.duration ?: 1
+                    val progressFloat = progress.toFloat() / duration
+
+                    cassetteView.setProgress(progressFloat)
+
+                    // detectar dirección
+                    val direction = when {
+                        progress > lastProgress -> 1   // adelante
+                        progress < lastProgress -> -1  // atrás (rebobinar)
+                        else -> 0
+                    }
+
+                    cassetteView.updateRotation(direction)
+
+                    lastProgress = progress
+                }
             }
+
             override fun onStartTrackingTouch(sb: SeekBar?) {}
+
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
 
@@ -369,6 +396,9 @@ class RecordActivity : AppCompatActivity() {
 
             seekBarRecord.max = player!!.duration
             txtDurationRecord.text = formatTime(player!!.duration)
+
+            cassetteView.setProgress(0f)
+            cassetteView.invalidate()
 
             handler.postDelayed({
                 seekBarRecord.max = player!!.duration

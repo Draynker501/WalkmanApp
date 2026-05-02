@@ -24,17 +24,18 @@ class CassetteView @JvmOverloads constructor(
         isReversed = value
     }
 
-    fun updateRotation() {
+    fun updateRotation(direction: Int = 1) {
         val speedLeft = 2f + (progress * 6f)
         val speedRight = 8f - (progress * 6f)
 
+        val dir = if (direction == 0) 1 else direction
+
         if (!isReversed) {
-            angleLeft += speedLeft
-            angleRight -= speedRight
+            angleLeft += speedLeft * dir
+            angleRight -= speedRight * dir
         } else {
-            // Invertido
-            angleLeft -= speedLeft
-            angleRight += speedRight
+            angleLeft -= speedLeft * dir
+            angleRight += speedRight * dir
         }
 
         invalidate()

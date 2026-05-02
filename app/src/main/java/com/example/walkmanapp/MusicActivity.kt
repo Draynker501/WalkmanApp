@@ -34,6 +34,7 @@ class MusicActivity : AppCompatActivity() {
 
     private lateinit var btnModeMusic: Button
 
+    private var lastProgress = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,7 +76,27 @@ class MusicActivity : AppCompatActivity() {
 
         seekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) mediaPlayer?.seekTo(progress)
+                if (fromUser) {
+                    mediaPlayer?.seekTo(progress)
+
+                    txtCurrentTime.text = formatTime(progress)
+
+                    val duration = mediaPlayer?.duration ?: 1
+                    val progressFloat = progress.toFloat() / duration
+
+                    cassetteView.setProgress(progressFloat)
+
+                    // detectar dirección
+                    val direction = when {
+                        progress > lastProgress -> 1   // adelante
+                        progress < lastProgress -> -1  // atrás (rebobinar)
+                        else -> 0
+                    }
+
+                    cassetteView.updateRotation(direction)
+
+                    lastProgress = progress
+                }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) {}
@@ -106,6 +127,7 @@ class MusicActivity : AppCompatActivity() {
         mediaPlayer?.setOnCompletionListener {
             isPlaying = false
             cassetteView.setProgress(0f)
+            cassetteView.invalidate()
             btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
 
             stopSeekBar()
