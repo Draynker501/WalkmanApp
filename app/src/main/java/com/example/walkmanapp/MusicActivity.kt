@@ -20,20 +20,14 @@ class MusicActivity : AppCompatActivity() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var isPlaying = false
-
     private val handler = Handler(Looper.getMainLooper())
     private var updateRunnable: Runnable? = null
-
     private var animLeft: ObjectAnimator? = null
     private var animRight: ObjectAnimator? = null
-
     private lateinit var txtCurrentTime: TextView
     private lateinit var txtDuration: TextView
-
     private lateinit var cassetteView: CassetteView
-
     private lateinit var btnModeMusic: Button
-
     private var lastProgress = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,7 +48,6 @@ class MusicActivity : AppCompatActivity() {
         cassetteView = findViewById(R.id.cassetteView)
 
         btnModeMusic = findViewById(R.id.btnModeMusic)
-
 
         initPlayer()
 

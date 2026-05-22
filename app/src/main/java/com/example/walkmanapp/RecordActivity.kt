@@ -406,24 +406,31 @@ class RecordActivity : AppCompatActivity() {
 
             player?.start()
             isPlaying = true
-            startSeekBarUpdater()
             btnPlay.setImageResource(android.R.drawable.ic_media_pause)
 
             runnable = object : Runnable {
                 override fun run() {
-                    if (player != null && isPlaying) {
-                        val pos = player!!.currentPosition.coerceAtMost(player!!.duration)
-                        seekBarRecord.progress = pos
-                        txtCurrentTimeRecord.text = formatTime(pos)
 
-                        val progress = pos.toFloat() / player!!.duration
-                        cassetteView.setProgress(progress)
-                        cassetteView.updateRotation()
+                    player?.let { mp ->
+
+                        if (mp.isPlaying) {
+
+                            val pos = mp.currentPosition.coerceAtMost(mp.duration)
+
+                            seekBarRecord.progress = pos
+                            txtCurrentTimeRecord.text = formatTime(pos)
+
+                            val progress = pos.toFloat() / mp.duration
+
+                            cassetteView.setProgress(progress)
+                            cassetteView.updateRotation()
+                        }
 
                         handler.postDelayed(this, 16)
                     }
                 }
             }
+
             handler.post(runnable!!)
 
             player?.setOnCompletionListener {
@@ -442,26 +449,16 @@ class RecordActivity : AppCompatActivity() {
                 player?.pause()
                 isPlaying = false
                 btnPlay.setImageResource(android.R.drawable.ic_media_play)
-            } else {
+                runnable?.let {
+                    handler.removeCallbacks(it)
+                }            } else {
                 player?.start()
                 isPlaying = true
                 btnPlay.setImageResource(android.R.drawable.ic_media_pause)
-            }
+                runnable?.let {
+                    handler.post(it)
+                }            }
         }
-    }
-
-    private fun startSeekBarUpdater() {
-        runnable = object : Runnable {
-            override fun run() {
-                player?.let {
-                    val pos = it.currentPosition
-                    seekBarRecord.progress = pos
-                    txtCurrentTimeRecord.text = formatTime(pos)
-                }
-                handler.postDelayed(this, 200)
-            }
-        }
-        handler.post(runnable!!)
     }
 
     private fun saveAudio() {
