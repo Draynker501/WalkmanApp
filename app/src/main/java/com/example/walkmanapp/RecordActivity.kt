@@ -62,6 +62,8 @@ class RecordActivity : AppCompatActivity() {
 
     private var pendingSeek = 0
 
+    private var audioDuration = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_record)
@@ -94,10 +96,18 @@ class RecordActivity : AppCompatActivity() {
                     txtCurrentTimeRecord.text = formatTime(progress)
 
                     // actualizar cassette
-                    val duration = player?.duration ?: 1
-                    val progressFloat = progress.toFloat() / duration
+                    val duration = if (player != null) {
+                        player!!.duration
+                    } else {
+                        audioDuration
+                    }
 
-                    cassetteView.setProgress(progressFloat)
+                    if (duration > 0) {
+                        val progressFloat = (progress.toFloat() / duration)
+                            .coerceIn(0f, 1f)
+
+                        cassetteView.setProgress(progressFloat)
+                    }
 
                     // detectar dirección
                     val direction = when {
@@ -167,6 +177,8 @@ class RecordActivity : AppCompatActivity() {
             seekBarRecord.progress = 0
             txtCurrentTimeRecord.text = "00:00"
             btnPlay.setImageResource(android.R.drawable.ic_media_play)
+
+            pendingSeek = 0
         }
 
         // Simular que el botón está presionado por estar en RecordActivity
@@ -285,6 +297,7 @@ class RecordActivity : AppCompatActivity() {
         stopRecordTimer()
 
         val duration = (System.currentTimeMillis() - recordStartTime).toInt()
+        audioDuration = duration
         txtDurationRecord.text = formatTime(duration)
         seekBarRecord.max = duration
     }
