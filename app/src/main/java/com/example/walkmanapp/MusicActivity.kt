@@ -30,6 +30,8 @@ class MusicActivity : AppCompatActivity() {
     private lateinit var btnModeMusic: Button
     private var lastProgress = 0
 
+    private var pendingSeek = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_music)
@@ -70,7 +72,12 @@ class MusicActivity : AppCompatActivity() {
         seekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    mediaPlayer?.seekTo(progress)
+
+                    pendingSeek = progress
+
+                    if (isPlaying) {
+                        mediaPlayer?.seekTo(progress)
+                    }
 
                     txtCurrentTime.text = formatTime(progress)
 
@@ -79,10 +86,9 @@ class MusicActivity : AppCompatActivity() {
 
                     cassetteView.setProgress(progressFloat)
 
-                    // detectar dirección
                     val direction = when {
-                        progress > lastProgress -> 1   // adelante
-                        progress < lastProgress -> -1  // atrás (rebobinar)
+                        progress > lastProgress -> 1
+                        progress < lastProgress -> -1
                         else -> 0
                     }
 
@@ -111,16 +117,37 @@ class MusicActivity : AppCompatActivity() {
     }
 
     private fun initPlayer() {
-        mediaPlayer = MediaPlayer.create(this, R.raw.mm_intro)
+
+        mediaPlayer?.release()
+
+        mediaPlayer = MediaPlayer().apply {
+
+            val afd = resources.openRawResourceFd(R.raw.mm_intro)
+
+            setDataSource(
+                afd.fileDescriptor,
+                afd.startOffset,
+                afd.length
+            )
+
+            afd.close()
+
+            prepare()
+        }
+
         txtTitle.text = "mm_intro.mp3"
+
+        seekBar.max = mediaPlayer?.duration ?: 0
 
         txtDuration.text = formatTime(mediaPlayer?.duration ?: 0)
         txtCurrentTime.text = "00:00"
 
         mediaPlayer?.setOnCompletionListener {
             isPlaying = false
+
             cassetteView.setProgress(0f)
             cassetteView.invalidate()
+
             btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
 
             stopSeekBar()
@@ -128,14 +155,24 @@ class MusicActivity : AppCompatActivity() {
 
             seekBar.progress = 0
             txtCurrentTime.text = "00:00"
+
+            pendingSeek = 0
         }
     }
 
     private fun playMusic() {
+
+        mediaPlayer?.seekTo(pendingSeek)
+
         mediaPlayer?.start()
+
         isPlaying = true
+
         btnPlayMusic.setImageResource(android.R.drawable.ic_media_pause)
+
+        stopSeekBar()
         startSeekBar()
+
         startReels()
     }
 
@@ -143,6 +180,7 @@ class MusicActivity : AppCompatActivity() {
         mediaPlayer?.pause()
         isPlaying = false
         btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
+        stopSeekBar()
         stopReels()
     }
 
@@ -169,9 +207,8 @@ class MusicActivity : AppCompatActivity() {
 
                     seekBar.progress = current
                     txtCurrentTime.text = formatTime(current)
-
-                    handler.postDelayed(this, 16)
                 }
+                handler.postDelayed(this, 16)
             }
         }
         handler.post(updateRunnable!!)

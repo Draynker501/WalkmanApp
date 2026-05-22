@@ -60,6 +60,8 @@ class RecordActivity : AppCompatActivity() {
 
     private var lastProgress = 0
 
+    private var pendingSeek = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_record)
@@ -85,6 +87,7 @@ class RecordActivity : AppCompatActivity() {
 
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
+                    pendingSeek = progress
                     player?.seekTo(progress)
 
                     // actualizar tiempo
@@ -392,6 +395,7 @@ class RecordActivity : AppCompatActivity() {
             player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 prepare()
+                seekTo(pendingSeek)
             }
 
             seekBarRecord.max = player!!.duration
@@ -442,6 +446,7 @@ class RecordActivity : AppCompatActivity() {
                 txtCurrentTimeRecord.text = "00:00"
                 cassetteView.setProgress(0f)
                 runnable?.let { r -> handler.removeCallbacks(r) }
+                pendingSeek = 0
             }
 
         } else {
