@@ -1,4 +1,4 @@
-package com.example.walkmanapp
+package com.example.walkmanapp.activities
 
 import android.Manifest
 import android.content.ContentValues
@@ -14,8 +14,13 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.walkmanapp.views.CassetteView
+import com.example.walkmanapp.R
+import com.example.walkmanapp.views.WaveformView
 import java.io.*
+import java.lang.Short
 import kotlin.concurrent.thread
+import kotlin.math.abs
 import kotlin.math.min
 
 class RecordActivity : AppCompatActivity() {
@@ -132,7 +137,7 @@ class RecordActivity : AppCompatActivity() {
         clearAudio()
 
         btnModeMusic.setOnClickListener {
-            startActivity(Intent(this, MusicActivity::class.java))
+            finish()
         }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -341,7 +346,7 @@ class RecordActivity : AppCompatActivity() {
 
                 while (i < read - 1) {
                     val value = (buffer[i].toInt() or (buffer[i + 1].toInt() shl 8)).toShort()
-                    val absValue = kotlin.math.abs(value.toInt())
+                    val absValue = abs(value.toInt())
 
                     if (absValue > maxAmp) maxAmp = absValue
 
@@ -377,12 +382,12 @@ class RecordActivity : AppCompatActivity() {
         file.writeInt(0)
         file.writeBytes("WAVEfmt ")
         file.writeInt(Integer.reverseBytes(16))
-        file.writeShort(java.lang.Short.reverseBytes(1).toInt())
-        file.writeShort(java.lang.Short.reverseBytes(1).toInt())
+        file.writeShort(Short.reverseBytes(1).toInt())
+        file.writeShort(Short.reverseBytes(1).toInt())
         file.writeInt(Integer.reverseBytes(44100))
         file.writeInt(Integer.reverseBytes(44100 * 2))
-        file.writeShort(java.lang.Short.reverseBytes(2).toInt())
-        file.writeShort(java.lang.Short.reverseBytes(16).toInt())
+        file.writeShort(Short.reverseBytes(2).toInt())
+        file.writeShort(Short.reverseBytes(16).toInt())
         file.writeBytes("data")
         file.writeInt(0)
     }

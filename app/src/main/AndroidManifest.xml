@@ -14,14 +14,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.WalkmanApp">
         <activity
-            android:name=".RecordActivity"
-            android:exported="false" />
+            android:name=".activities.RecordActivity"
+            android:exported="false"
+            android:launchMode="singleTask"/>
         <activity
-            android:name=".MusicActivity"
+            android:name=".activities.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

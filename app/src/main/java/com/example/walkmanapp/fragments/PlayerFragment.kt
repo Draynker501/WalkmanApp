@@ -1,15 +1,21 @@
-package com.example.walkmanapp
+package com.example.walkmanapp.fragments
 
+import android.os.Bundle
 import android.animation.ObjectAnimator
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.*
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
-import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.fragment.app.Fragment
+import com.example.walkmanapp.views.CassetteView
+import com.example.walkmanapp.R
+import com.example.walkmanapp.activities.RecordActivity
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
-class MusicActivity : AppCompatActivity() {
-
+class PlayerFragment : Fragment() {
     private lateinit var btnPlayMusic: ImageButton
     private lateinit var btnBack: ImageButton
     private lateinit var btnForward: ImageButton
@@ -32,24 +38,32 @@ class MusicActivity : AppCompatActivity() {
 
     private var pendingSeek = 0
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_music)
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
 
-        btnPlayMusic = findViewById(R.id.btnPlayMusic)
-        btnBack = findViewById(R.id.btnBack)
-        btnForward = findViewById(R.id.btnForward)
-        btnModeRecord = findViewById(R.id.btnModeRecord)
+        val view = inflater.inflate(
+            R.layout.fragment_player,
+            container,
+            false
+        )
 
-        seekBar = findViewById(R.id.seekBar)
-        txtTitle = findViewById(R.id.txtTitle)
+        btnPlayMusic = view.findViewById(R.id.btnPlayMusic)
+        btnBack = view.findViewById(R.id.btnBack)
+        btnForward = view.findViewById(R.id.btnForward)
+        btnModeRecord = view.findViewById(R.id.btnModeRecord)
 
-        txtCurrentTime = findViewById(R.id.txtCurrentTime)
-        txtDuration = findViewById(R.id.txtDuration)
+        seekBar = view.findViewById(R.id.seekBar)
+        txtTitle = view.findViewById(R.id.txtTitle)
 
-        cassetteView = findViewById(R.id.cassetteView)
+        txtCurrentTime = view.findViewById(R.id.txtCurrentTime)
+        txtDuration = view.findViewById(R.id.txtDuration)
 
-        btnModeMusic = findViewById(R.id.btnModeMusic)
+        cassetteView = view.findViewById(R.id.cassetteView)
+
+        btnModeMusic = view.findViewById(R.id.btnModeMusic)
 
         initPlayer()
 
@@ -66,7 +80,7 @@ class MusicActivity : AppCompatActivity() {
         }
 
         btnModeRecord.setOnClickListener {
-            startActivity(Intent(this, RecordActivity::class.java))
+            startActivity(Intent(requireContext(), RecordActivity::class.java))
         }
 
         seekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
@@ -114,7 +128,12 @@ class MusicActivity : AppCompatActivity() {
         }
 
         btnModeMusic.isSelected = true
+
+        val bottomNav = view.findViewById<BottomNavigationView>(R.id.bottomNavigation)
+
+        return view
     }
+
 
     private fun initPlayer() {
 
@@ -228,7 +247,7 @@ class MusicActivity : AppCompatActivity() {
         animRight?.cancel()
     }
 
-    override fun onDestroy() {
+    override fun onDestroyView() {
         super.onDestroy()
         mediaPlayer?.release()
         stopSeekBar()

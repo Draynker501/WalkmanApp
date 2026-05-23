@@ -12,7 +12,7 @@
         android:layout_height="wrap_content">
 
         <!-- CASSETTE SIMULADO -->
-        <com.example.walkmanapp.CassetteView
+        <com.example.walkmanapp.views.CassetteView
             android:id="@+id/cassetteView"
             android:background="@drawable/bg_walkman_body"
             android:layout_width="300dp"
@@ -158,7 +158,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
-            <com.example.walkmanapp.WaveformView
+            <com.example.walkmanapp.views.WaveformView
                 android:id="@+id/waveformView"
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"/>
