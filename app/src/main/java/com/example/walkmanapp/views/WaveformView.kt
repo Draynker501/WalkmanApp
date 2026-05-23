@@ -29,6 +29,17 @@ class WaveformView(context: Context, attrs: AttributeSet?) : View(context, attrs
         invalidate()
     }
 
+    fun setWaveform(data: List<Float>) {
+
+        amplitudes.clear()
+
+        amplitudes.addAll(data)
+
+        requestLayout()
+
+        invalidate()
+    }
+
     fun clear() {
         amplitudes.clear()
 
