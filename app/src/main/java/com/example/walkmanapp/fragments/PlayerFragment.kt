@@ -14,6 +14,9 @@ import com.example.walkmanapp.views.CassetteView
 import com.example.walkmanapp.R
 import com.example.walkmanapp.activities.RecordActivity
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import androidx.lifecycle.ViewModelProvider
+import com.example.walkmanapp.models.Song
+import com.example.walkmanapp.viewmodels.MusicViewModel
 
 class PlayerFragment : Fragment() {
     private lateinit var btnPlayMusic: ImageButton
@@ -37,6 +40,10 @@ class PlayerFragment : Fragment() {
     private var lastProgress = 0
 
     private var pendingSeek = 0
+
+    private lateinit var musicViewModel: MusicViewModel
+
+    private var currentSong: Song? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -65,7 +72,10 @@ class PlayerFragment : Fragment() {
 
         btnModeMusic = view.findViewById(R.id.btnModeMusic)
 
-        initPlayer()
+        musicViewModel =
+            ViewModelProvider(requireActivity())[MusicViewModel::class.java]
+
+        observeSong()
 
         btnPlayMusic.setOnClickListener {
             if (isPlaying) pauseMusic() else playMusic()
@@ -134,49 +144,39 @@ class PlayerFragment : Fragment() {
         return view
     }
 
+    private fun observeSong() {
 
-    private fun initPlayer() {
+        musicViewModel.selectedSong.observe(viewLifecycleOwner) { song ->
+
+            currentSong = song
+
+            loadSelectedSong(song)
+        }
+    }
+
+    private fun loadSelectedSong(song: Song) {
 
         mediaPlayer?.release()
 
         mediaPlayer = MediaPlayer().apply {
 
-            val afd = resources.openRawResourceFd(R.raw.mm_intro)
-
-            setDataSource(
-                afd.fileDescriptor,
-                afd.startOffset,
-                afd.length
-            )
-
-            afd.close()
+            setDataSource(song.path)
 
             prepare()
         }
 
-        txtTitle.text = "mm_intro.mp3"
+        txtTitle.text = song.title
 
         seekBar.max = mediaPlayer?.duration ?: 0
 
-        txtDuration.text = formatTime(mediaPlayer?.duration ?: 0)
+        txtDuration.text =
+            formatTime(mediaPlayer?.duration ?: 0)
+
         txtCurrentTime.text = "00:00"
 
-        mediaPlayer?.setOnCompletionListener {
-            isPlaying = false
+        pendingSeek = 0
 
-            cassetteView.setProgress(0f)
-            cassetteView.invalidate()
-
-            btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
-
-            stopSeekBar()
-            stopReels()
-
-            seekBar.progress = 0
-            txtCurrentTime.text = "00:00"
-
-            pendingSeek = 0
-        }
+        playMusic()
     }
 
     private fun playMusic() {

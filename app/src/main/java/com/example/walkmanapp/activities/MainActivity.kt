@@ -9,12 +9,21 @@ import com.example.walkmanapp.fragments.PlaylistsFragment
 import com.example.walkmanapp.R
 import com.example.walkmanapp.fragments.SongsFragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+
+private val REQUEST_AUDIO_PERMISSION = 100
 
 class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        checkAudioPermission()
 
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNavigation)
 
@@ -53,6 +62,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Solicitar permiso de audio
+    private fun checkAudioPermission() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+
+            if (
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.READ_MEDIA_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.READ_MEDIA_AUDIO),
+                    REQUEST_AUDIO_PERMISSION
+                )
+            }
+
+        } else {
+
+            if (
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
+                    REQUEST_AUDIO_PERMISSION
+                )
+            }
+        }
+    }
+
+    // Cambiar fragment
     private fun replaceFragment(fragment: Fragment) {
 
         supportFragmentManager.beginTransaction()
