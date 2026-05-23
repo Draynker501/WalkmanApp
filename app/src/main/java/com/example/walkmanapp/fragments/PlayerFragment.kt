@@ -176,7 +176,34 @@ class PlayerFragment : Fragment() {
 
         pendingSeek = 0
 
+        mediaPlayer?.setOnCompletionListener {
+
+            playNextSong()
+        }
+
         playMusic()
+    }
+
+    private fun playNextSong() {
+
+        val songs =
+            musicViewModel.songsList.value ?: return
+
+        if (songs.isEmpty()) return
+
+        musicViewModel.currentIndex++
+
+        if (musicViewModel.currentIndex >= songs.size) {
+
+            musicViewModel.currentIndex = 0
+        }
+
+        val nextSong =
+            songs[musicViewModel.currentIndex]
+
+        currentSong = nextSong
+
+        loadSelectedSong(nextSong)
     }
 
     private fun playMusic() {

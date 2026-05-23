@@ -50,7 +50,13 @@ class SongsFragment : Fragment() {
 
         loadSongs()
 
+        musicViewModel.songsList.value = songsList
+
         adapter = SongsAdapter(filteredList) { song ->
+
+            val index = songsList.indexOf(song)
+
+            musicViewModel.currentIndex = index
 
             musicViewModel.selectedSong.value = song
 
