@@ -55,6 +55,10 @@ class PlayerFragment : Fragment() {
 
     private val playbackHistory = mutableListOf<Int>()
 
+    private val shuffleQueue = mutableListOf<Int>()
+
+    private var isManualSelection = false
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -97,9 +101,9 @@ class PlayerFragment : Fragment() {
 
         btnForward.setOnClickListener {
             if (isShuffleEnabled) {
-                playRandomSong()
+                playRandomSong(true)
             } else {
-                playNextSong()
+                playNextSong(true)
             }
         }
 
@@ -163,6 +167,12 @@ class PlayerFragment : Fragment() {
 
             isShuffleEnabled = !isShuffleEnabled
 
+            if (isShuffleEnabled) {
+                refillShuffleQueue()
+            } else {
+                shuffleQueue.clear()
+            }
+
             updateShuffleUI()
         }
 
@@ -192,9 +202,15 @@ class PlayerFragment : Fragment() {
     private fun observeSong() {
 
         musicViewModel.selectedSong.observe(viewLifecycleOwner) { song ->
-
             currentSong = song
+            // selección manual: reiniciar shuffle
 
+            if (isManualSelection) {
+                if (isShuffleEnabled) {
+                    refillShuffleQueue()
+                }
+                isManualSelection = false
+            }
             loadSelectedSong(song)
         }
     }
@@ -222,7 +238,7 @@ class PlayerFragment : Fragment() {
         playMusic()
     }
 
-    private fun playNextSong() {
+    private fun playNextSong(isManualSkip: Boolean = false) {
 
         val songs =
             musicViewModel.songsList.value ?: return
@@ -252,10 +268,8 @@ class PlayerFragment : Fragment() {
 
         val player = mediaPlayer ?: return
 
-        /*
-         * Si lleva más de 3 segundos:
-         * reiniciar canción actual
-         */
+        // Si lleva más de 3 segundos: reiniciar canción actual
+
 
         if (player.currentPosition > 3000) {
 
@@ -264,10 +278,8 @@ class PlayerFragment : Fragment() {
             return
         }
 
-        /*
-         * SHUFFLE:
-         * volver a canciones reproducidas
-         */
+        // SHUFFLE: volver a canciones reproducidas
+
 
         if (isShuffleEnabled) {
 
@@ -294,19 +306,15 @@ class PlayerFragment : Fragment() {
             return
         }
 
-        /*
-         * NORMAL:
-         * canción anterior por índice
-         */
+        //NORMAL: canción anterior por índice
 
         val songs =
             musicViewModel.songsList.value ?: return
 
         if (songs.isEmpty()) return
 
-        /*
-         * Si estamos en la primera canción
-         */
+        // Si estamos en la primera canción
+
 
         if (musicViewModel.currentIndex == 0) {
 
@@ -314,10 +322,8 @@ class PlayerFragment : Fragment() {
                 playbackMode == PlaybackMode.REPEAT_ALL ||
                         playbackMode == PlaybackMode.REPEAT_ONE
 
-            /*
-             * sin loop:
-             * quedarse en primera canción
-             */
+            // sin loop: quedarse en primera canción
+
 
             if (!loopEnabled) {
 
@@ -326,10 +332,8 @@ class PlayerFragment : Fragment() {
                 return
             }
 
-            /*
-             * con loop:
-             * ir a la última
-             */
+            // ir a la última
+
 
             musicViewModel.currentIndex =
                 songs.lastIndex
@@ -380,51 +384,167 @@ class PlayerFragment : Fragment() {
         }
     }
 
-    private fun playRandomSong() {
+    private fun playRandomSong(isManualSkip: Boolean = false) {
 
         val songs =
             musicViewModel.songsList.value ?: return
 
         if (songs.isEmpty()) return
 
+        // si ya no quedan canciones
+
+        if (shuffleQueue.isEmpty()) {
+
+            when(playbackMode) {
+
+                PlaybackMode.OFF -> {
+
+                    if (isManualSkip) {
+                        refillShuffleQueue()
+                    } else {
+                        prepareFirstShuffleSongPaused()
+
+                        return
+                    }
+                }
+
+                PlaybackMode.REPEAT_ALL -> {
+                    refillShuffleQueue()
+                }
+                else -> {
+                    refillShuffleQueue()
+                }
+            }
+        }
+
+        // sacar siguiente canción random
+
         val randomIndex =
-            (songs.indices).random()
+            shuffleQueue.removeAt(0)
 
         addToHistory(
             musicViewModel.currentIndex
         )
 
-        musicViewModel.currentIndex = randomIndex
+        musicViewModel.currentIndex =
+            randomIndex
 
-        val randomSong = songs[randomIndex]
+        val randomSong =
+            songs[randomIndex]
 
         currentSong = randomSong
 
         loadSelectedSong(randomSong)
     }
 
+    private fun prepareFirstShuffleSongPaused() {
+
+        val songs =
+            musicViewModel.songsList.value ?: return
+
+        if (songs.isEmpty()) return
+
+        // crear nueva cola shuffle
+
+        refillShuffleQueue()
+
+        // tomar PRIMER canción de la cola
+
+
+        val nextIndex =
+            shuffleQueue.first()
+
+        musicViewModel.currentIndex =
+            nextIndex
+
+        val nextSong =
+            songs[nextIndex]
+
+        currentSong = nextSong
+
+        mediaPlayer?.release()
+
+        mediaPlayer = MediaPlayer().apply {
+
+            setDataSource(nextSong.path)
+
+            prepare()
+        }
+
+        updatePlayerUI()
+
+        pendingSeek = 0
+
+        cassetteView.setProgress(0f)
+
+        cassetteView.invalidate()
+
+        isPlaying = false
+
+        btnPlayMusic.setImageResource(
+            android.R.drawable.ic_media_play
+        )
+
+        stopSeekBar()
+
+        stopReels()
+    }
+
     private fun addToHistory(index: Int) {
 
         playbackHistory.add(index)
-        /*
-         * máximo 5 canciones
-
-
-        if (playbackHistory.size > 5) {
-
-            playbackHistory.removeAt(0)
-        }
-        */
     }
 
-    private fun playNextSongWithoutLoop() {
+    private fun playNextSongWithoutLoop(isManualSkip: Boolean = false) {
         val songs =
             musicViewModel.songsList.value ?: return
         if (songs.isEmpty()) return
         if (musicViewModel.currentIndex >= songs.lastIndex) {
-            pauseMusic()
+
+            if (isManualSkip) {
+
+                musicViewModel.currentIndex = 0
+
+                val firstSong =
+                    songs[musicViewModel.currentIndex]
+
+                currentSong = firstSong
+
+                loadSelectedSong(firstSong)
+
+                return
+            }
+
+            // automático: preparar primera canción pausada
+
+            musicViewModel.currentIndex = 0
+
+            val firstSong =
+                songs[musicViewModel.currentIndex]
+
+            currentSong = firstSong
+            mediaPlayer?.release()
+            mediaPlayer = MediaPlayer().apply {
+
+                setDataSource(firstSong.path)
+
+                prepare()
+            }
+
+            updatePlayerUI()
+
+            pendingSeek = 0
+            cassetteView.setProgress(0f)
+            cassetteView.invalidate()
+            isPlaying = false
+
+            stopSeekBar()
+
+            stopReels()
+
             return
         }
+
         addToHistory(
             musicViewModel.currentIndex
         )
@@ -464,6 +584,22 @@ class PlayerFragment : Fragment() {
         )
         stopSeekBar()
         stopReels()
+    }
+
+    private fun refillShuffleQueue() {
+        val songs =
+            musicViewModel.songsList.value ?: return
+
+        shuffleQueue.clear()
+        shuffleQueue.addAll(
+            songs.indices.shuffled()
+        )
+
+        // evitar que la canción actual salga inmediatamente otra vez
+
+        shuffleQueue.remove(
+            musicViewModel.currentIndex
+        )
     }
 
     private fun playMusic() {
