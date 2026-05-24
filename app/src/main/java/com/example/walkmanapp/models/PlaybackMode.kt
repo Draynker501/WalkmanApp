@@ -2,11 +2,11 @@ package com.example.walkmanapp.models
 
 enum class PlaybackMode {
 
-    NORMAL,
+    OFF,
 
-    REPEAT_ONCE,
+    REPEAT_ALL,
 
-    REPEAT_INFINITE,
+    REPEAT_ONE,
 
-    SHUFFLE
+    STOP_AFTER
 }

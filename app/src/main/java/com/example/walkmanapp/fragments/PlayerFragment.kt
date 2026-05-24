@@ -13,8 +13,8 @@ import androidx.fragment.app.Fragment
 import com.example.walkmanapp.views.CassetteView
 import com.example.walkmanapp.R
 import com.example.walkmanapp.activities.RecordActivity
-import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.lifecycle.ViewModelProvider
+import com.example.walkmanapp.models.PlaybackMode
 import com.example.walkmanapp.models.Song
 import com.example.walkmanapp.viewmodels.MusicViewModel
 
@@ -44,6 +44,16 @@ class PlayerFragment : Fragment() {
     private lateinit var musicViewModel: MusicViewModel
 
     private var currentSong: Song? = null
+
+    private var playbackMode = PlaybackMode.OFF
+
+    private lateinit var btnPlaybackMode: ImageButton
+
+    private lateinit var btnShuffle: ImageButton
+
+    private var isShuffleEnabled = false
+
+    private val playbackHistory = mutableListOf<Int>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -82,11 +92,15 @@ class PlayerFragment : Fragment() {
         }
 
         btnBack.setOnClickListener {
-            mediaPlayer?.seekTo((mediaPlayer!!.currentPosition - 5000).coerceAtLeast(0))
+            handlePreviousSong()
         }
 
         btnForward.setOnClickListener {
-            mediaPlayer?.seekTo(mediaPlayer!!.currentPosition + 5000)
+            if (isShuffleEnabled) {
+                playRandomSong()
+            } else {
+                playNextSong()
+            }
         }
 
         btnModeRecord.setOnClickListener {
@@ -139,7 +153,38 @@ class PlayerFragment : Fragment() {
 
         btnModeMusic.isSelected = true
 
-        val bottomNav = view.findViewById<BottomNavigationView>(R.id.bottomNavigation)
+        btnPlaybackMode =
+            view.findViewById(R.id.btnPlaybackMode)
+
+        btnShuffle =
+            view.findViewById(R.id.btnShuffle)
+
+        btnShuffle.setOnClickListener {
+
+            isShuffleEnabled = !isShuffleEnabled
+
+            updateShuffleUI()
+        }
+
+        btnPlaybackMode.setOnClickListener {
+            playbackMode = when(playbackMode) {
+                PlaybackMode.OFF -> {
+                    PlaybackMode.REPEAT_ALL
+                }
+                PlaybackMode.REPEAT_ALL -> {
+                    PlaybackMode.REPEAT_ONE
+                }
+                PlaybackMode.REPEAT_ONE -> {
+                    PlaybackMode.STOP_AFTER
+                }
+                PlaybackMode.STOP_AFTER -> {
+                    PlaybackMode.OFF
+                }
+            }
+
+            updatePlaybackModeUI()
+            updateShuffleUI()
+        }
 
         return view
     }
@@ -165,20 +210,13 @@ class PlayerFragment : Fragment() {
             prepare()
         }
 
-        txtTitle.text = song.title
-
-        seekBar.max = mediaPlayer?.duration ?: 0
-
-        txtDuration.text =
-            formatTime(mediaPlayer?.duration ?: 0)
-
-        txtCurrentTime.text = "00:00"
+        updatePlayerUI()
 
         pendingSeek = 0
 
         mediaPlayer?.setOnCompletionListener {
 
-            playNextSong()
+            handleSongCompletion()
         }
 
         playMusic()
@@ -190,6 +228,10 @@ class PlayerFragment : Fragment() {
             musicViewModel.songsList.value ?: return
 
         if (songs.isEmpty()) return
+
+        addToHistory(
+            musicViewModel.currentIndex
+        )
 
         musicViewModel.currentIndex++
 
@@ -206,15 +248,231 @@ class PlayerFragment : Fragment() {
         loadSelectedSong(nextSong)
     }
 
-    private fun playMusic() {
+    private fun handlePreviousSong() {
 
-        mediaPlayer?.seekTo(pendingSeek)
+        val player = mediaPlayer ?: return
+
+        /*
+         * Si lleva más de 3 segundos:
+         * reiniciar canción actual
+         */
+
+        if (player.currentPosition > 3000) {
+
+            player.seekTo(0)
+
+            return
+        }
+
+        /*
+         * SHUFFLE:
+         * volver a canciones reproducidas
+         */
+
+        if (isShuffleEnabled) {
+
+            if (playbackHistory.isEmpty()) return
+
+            val previousIndex =
+                playbackHistory.removeAt(
+                    playbackHistory.lastIndex
+                )
+
+            musicViewModel.currentIndex =
+                previousIndex
+
+            val songs =
+                musicViewModel.songsList.value ?: return
+
+            val previousSong =
+                songs[previousIndex]
+
+            currentSong = previousSong
+
+            loadSelectedSong(previousSong)
+
+            return
+        }
+
+        /*
+         * NORMAL:
+         * canción anterior por índice
+         */
+
+        val songs =
+            musicViewModel.songsList.value ?: return
+
+        if (songs.isEmpty()) return
+
+        /*
+         * Si estamos en la primera canción
+         */
+
+        if (musicViewModel.currentIndex == 0) {
+
+            val loopEnabled =
+                playbackMode == PlaybackMode.REPEAT_ALL ||
+                        playbackMode == PlaybackMode.REPEAT_ONE
+
+            /*
+             * sin loop:
+             * quedarse en primera canción
+             */
+
+            if (!loopEnabled) {
+
+                player.seekTo(0)
+
+                return
+            }
+
+            /*
+             * con loop:
+             * ir a la última
+             */
+
+            musicViewModel.currentIndex =
+                songs.lastIndex
+
+        } else {
+
+            musicViewModel.currentIndex--
+        }
+
+        val previousSong =
+            songs[musicViewModel.currentIndex]
+
+        currentSong = previousSong
+
+        loadSelectedSong(previousSong)
+    }
+
+    private fun handleSongCompletion() {
+        isPlaying = false
+
+        btnPlayMusic.setImageResource(
+            android.R.drawable.ic_media_play
+        )
+
+        when(playbackMode) {
+            PlaybackMode.OFF -> {
+                if (isShuffleEnabled) {
+                    playRandomSong()
+                } else {
+                    playNextSongWithoutLoop()
+                }
+            }
+            PlaybackMode.REPEAT_ALL -> {
+                if (isShuffleEnabled) {
+                    playRandomSong()
+                } else {
+                    playNextSong()
+                }
+            }
+            PlaybackMode.REPEAT_ONE -> {
+                currentSong?.let {
+                    loadSelectedSong(it)
+                }
+            }
+            PlaybackMode.STOP_AFTER -> {
+                prepareNextSongPaused()
+            }
+        }
+    }
+
+    private fun playRandomSong() {
+
+        val songs =
+            musicViewModel.songsList.value ?: return
+
+        if (songs.isEmpty()) return
+
+        val randomIndex =
+            (songs.indices).random()
+
+        addToHistory(
+            musicViewModel.currentIndex
+        )
+
+        musicViewModel.currentIndex = randomIndex
+
+        val randomSong = songs[randomIndex]
+
+        currentSong = randomSong
+
+        loadSelectedSong(randomSong)
+    }
+
+    private fun addToHistory(index: Int) {
+
+        playbackHistory.add(index)
+        /*
+         * máximo 5 canciones
+
+
+        if (playbackHistory.size > 5) {
+
+            playbackHistory.removeAt(0)
+        }
+        */
+    }
+
+    private fun playNextSongWithoutLoop() {
+        val songs =
+            musicViewModel.songsList.value ?: return
+        if (songs.isEmpty()) return
+        if (musicViewModel.currentIndex >= songs.lastIndex) {
+            pauseMusic()
+            return
+        }
+        addToHistory(
+            musicViewModel.currentIndex
+        )
+        musicViewModel.currentIndex++
+        val nextSong =
+            songs[musicViewModel.currentIndex]
+        currentSong = nextSong
+        loadSelectedSong(nextSong)
+    }
+
+    private fun prepareNextSongPaused() {
+        val songs =
+            musicViewModel.songsList.value ?: return
+        if (songs.isEmpty()) return
+        addToHistory(
+            musicViewModel.currentIndex
+        )
+        musicViewModel.currentIndex++
+        if (musicViewModel.currentIndex >= songs.size) {
+            musicViewModel.currentIndex = 0
+        }
+        val nextSong =
+            songs[musicViewModel.currentIndex]
+        currentSong = nextSong
+        mediaPlayer?.release()
+        mediaPlayer = MediaPlayer().apply {
+            setDataSource(nextSong.path)
+            prepare()
+        }
+        updatePlayerUI()
+        pendingSeek = 0
+        cassetteView.setProgress(0f)
+        cassetteView.invalidate()
+        isPlaying = false
+        btnPlayMusic.setImageResource(
+            android.R.drawable.ic_media_play
+        )
+        stopSeekBar()
+        stopReels()
+    }
+
+    private fun playMusic() {
 
         mediaPlayer?.start()
 
         isPlaying = true
 
-        btnPlayMusic.setImageResource(android.R.drawable.ic_media_pause)
+        updatePlayerUI()
 
         stopSeekBar()
         startSeekBar()
@@ -225,7 +483,7 @@ class PlayerFragment : Fragment() {
     private fun pauseMusic() {
         mediaPlayer?.pause()
         isPlaying = false
-        btnPlayMusic.setImageResource(android.R.drawable.ic_media_play)
+        updatePlayerUI()
         stopSeekBar()
         stopReels()
     }
@@ -275,12 +533,94 @@ class PlayerFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        super.onDestroy()
+        super.onDestroyView()
         mediaPlayer?.release()
         stopSeekBar()
     }
 
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
+    }
+
+    private fun updatePlayerUI() {
+        val player = mediaPlayer ?: return
+        txtTitle.text =
+            currentSong?.title ?: "NO TAPE"
+        seekBar.max = player.duration
+        txtDuration.text =
+            formatTime(player.duration)
+        txtCurrentTime.text =
+            formatTime(player.currentPosition)
+        seekBar.progress =
+            player.currentPosition
+        if (isPlaying) {
+            btnPlayMusic.setImageResource(
+                android.R.drawable.ic_media_pause
+            )
+        } else {
+            btnPlayMusic.setImageResource(
+                android.R.drawable.ic_media_play
+            )
+        }
+    }
+
+    private fun updatePlaybackModeUI() {
+        when(playbackMode) {PlaybackMode.OFF -> {
+                btnPlaybackMode.setImageResource(
+                    R.drawable.ic_drepeat
+                )
+            btnPlaybackMode.setColorFilter(
+                android.graphics.Color.GRAY
+            )
+            btnPlaybackMode.scaleX = 1f
+            btnPlaybackMode.scaleY = 1f
+            }
+            PlaybackMode.REPEAT_ALL -> {
+                btnPlaybackMode.setImageResource(
+                    R.drawable.ic_repeat
+                )
+                btnPlaybackMode.setColorFilter(
+                    android.graphics.Color.WHITE
+                )
+                btnPlaybackMode.scaleX = 1.15f
+                btnPlaybackMode.scaleY = 1.15f
+            }
+            PlaybackMode.REPEAT_ONE -> {
+                btnPlaybackMode.setImageResource(
+                    R.drawable.ic_repeatb
+                )
+                btnPlaybackMode.setColorFilter(
+                    android.graphics.Color.WHITE
+                )
+                btnPlaybackMode.scaleX = 1.15f
+                btnPlaybackMode.scaleY = 1.15f
+            }
+            PlaybackMode.STOP_AFTER -> {
+                btnPlaybackMode.setImageResource(
+                    R.drawable.ic_endqueue
+                )
+                btnPlaybackMode.setColorFilter(
+                    android.graphics.Color.WHITE
+                )
+                btnPlaybackMode.scaleX = 1.15f
+                btnPlaybackMode.scaleY = 1.15f
+            }
+        }
+    }
+
+    private fun updateShuffleUI() {
+        if (isShuffleEnabled) {
+            btnShuffle.setColorFilter(
+                android.graphics.Color.WHITE
+            )
+            btnShuffle.scaleX = 1.15f
+            btnShuffle.scaleY = 1.15f
+        } else {
+            btnShuffle.setColorFilter(
+                android.graphics.Color.GRAY
+            )
+            btnShuffle.scaleX = 1f
+            btnShuffle.scaleY = 1f
+        }
     }
 }
