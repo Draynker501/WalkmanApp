@@ -319,11 +319,9 @@ class PlayerFragment : Fragment() {
         if (musicViewModel.currentIndex == 0) {
 
             val loopEnabled =
-                playbackMode == PlaybackMode.REPEAT_ALL ||
-                        playbackMode == PlaybackMode.REPEAT_ONE
+                playbackMode == PlaybackMode.REPEAT_ALL
 
             // sin loop: quedarse en primera canción
-
 
             if (!loopEnabled) {
 
@@ -333,7 +331,6 @@ class PlayerFragment : Fragment() {
             }
 
             // ir a la última
-
 
             musicViewModel.currentIndex =
                 songs.lastIndex
