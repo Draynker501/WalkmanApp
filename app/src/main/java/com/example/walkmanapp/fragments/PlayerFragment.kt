@@ -3,7 +3,6 @@ package com.example.walkmanapp.fragments
 import android.os.Bundle
 import android.animation.ObjectAnimator
 import android.content.Intent
-import android.media.MediaPlayer
 import android.os.*
 import android.view.LayoutInflater
 import android.view.View
@@ -17,6 +16,11 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.walkmanapp.models.PlaybackMode
 import com.example.walkmanapp.models.Song
 import com.example.walkmanapp.viewmodels.MusicViewModel
+import android.content.ComponentName
+import android.content.Context
+import android.content.ServiceConnection
+import android.os.IBinder
+import com.example.walkmanapp.services.MusicService
 
 class PlayerFragment : Fragment() {
     private lateinit var btnPlayMusic: ImageButton
@@ -27,8 +31,7 @@ class PlayerFragment : Fragment() {
     private lateinit var seekBar: SeekBar
     private lateinit var txtTitle: TextView
 
-    private var mediaPlayer: MediaPlayer? = null
-    private var isPlaying = false
+
     private val handler = Handler(Looper.getMainLooper())
     private var updateRunnable: Runnable? = null
     private var animLeft: ObjectAnimator? = null
@@ -43,21 +46,23 @@ class PlayerFragment : Fragment() {
 
     private lateinit var musicViewModel: MusicViewModel
 
-    private var currentSong: Song? = null
 
-    private var playbackMode = PlaybackMode.OFF
 
     private lateinit var btnPlaybackMode: ImageButton
 
     private lateinit var btnShuffle: ImageButton
 
-    private var isShuffleEnabled = false
+
 
     private val playbackHistory = mutableListOf<Int>()
 
     private val shuffleQueue = mutableListOf<Int>()
 
     private var isManualSelection = false
+
+    private var musicService: MusicService? = null
+
+    private var isBound = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -89,10 +94,8 @@ class PlayerFragment : Fragment() {
         musicViewModel =
             ViewModelProvider(requireActivity())[MusicViewModel::class.java]
 
-        observeSong()
-
         btnPlayMusic.setOnClickListener {
-            if (isPlaying) pauseMusic() else playMusic()
+            if (musicService?.isPlaying == true) pauseMusic() else playMusic()
         }
 
         btnBack.setOnClickListener {
@@ -100,7 +103,7 @@ class PlayerFragment : Fragment() {
         }
 
         btnForward.setOnClickListener {
-            if (isShuffleEnabled) {
+            if (musicService?.isShuffleEnabled == true) {
                 playRandomSong(true)
             } else {
                 playNextSong(true)
@@ -117,13 +120,13 @@ class PlayerFragment : Fragment() {
 
                     pendingSeek = progress
 
-                    if (isPlaying) {
-                        mediaPlayer?.seekTo(progress)
+                    if (musicService?.isPlaying == true) {
+                        musicService?.mediaPlayer?.seekTo(progress)
                     }
 
                     txtCurrentTime.text = formatTime(progress)
 
-                    val duration = mediaPlayer?.duration ?: 1
+                    val duration = musicService?.mediaPlayer?.duration ?: 1
                     val progressFloat = progress.toFloat() / duration
 
                     cassetteView.setProgress(progressFloat)
@@ -165,9 +168,12 @@ class PlayerFragment : Fragment() {
 
         btnShuffle.setOnClickListener {
 
-            isShuffleEnabled = !isShuffleEnabled
+            val enabled =
+                musicService?.isShuffleEnabled ?: false
 
-            if (isShuffleEnabled) {
+            musicService?.isShuffleEnabled = !enabled
+
+            if (musicService?.isShuffleEnabled == true) {
                 refillShuffleQueue()
             } else {
                 shuffleQueue.clear()
@@ -177,63 +183,127 @@ class PlayerFragment : Fragment() {
         }
 
         btnPlaybackMode.setOnClickListener {
-            playbackMode = when(playbackMode) {
-                PlaybackMode.OFF -> {
-                    PlaybackMode.REPEAT_ALL
+            musicService?.playbackMode =
+                when(musicService?.playbackMode) {
+                    PlaybackMode.OFF ->
+                        PlaybackMode.REPEAT_ALL
+                    PlaybackMode.REPEAT_ALL ->
+                        PlaybackMode.REPEAT_ONE
+                    PlaybackMode.REPEAT_ONE ->
+                        PlaybackMode.STOP_AFTER
+                    PlaybackMode.STOP_AFTER,
+                    null ->
+                        PlaybackMode.OFF
                 }
-                PlaybackMode.REPEAT_ALL -> {
-                    PlaybackMode.REPEAT_ONE
-                }
-                PlaybackMode.REPEAT_ONE -> {
-                    PlaybackMode.STOP_AFTER
-                }
-                PlaybackMode.STOP_AFTER -> {
-                    PlaybackMode.OFF
-                }
-            }
 
             updatePlaybackModeUI()
-            updateShuffleUI()
         }
+
+        val intent =
+            Intent(requireContext(), MusicService::class.java)
+
+        requireContext().startService(intent)
+
+        requireActivity().bindService(
+            intent,
+            serviceConnection,
+            Context.BIND_AUTO_CREATE
+        )
 
         return view
     }
 
+    private val serviceConnection = object : ServiceConnection {
+
+        override fun onServiceConnected(
+            name: ComponentName?,
+            service: IBinder?
+        ) {
+            val binder =
+                service as MusicService.MusicBinder
+
+            musicService =
+                binder.getService()
+
+            isBound = true
+
+            observeSong()
+
+            musicService?.currentSong?.let {
+                txtTitle.text = it.title
+            }
+
+            updatePlayerUI()
+            updatePlaybackModeUI()
+            updateShuffleUI()
+
+            if (musicService?.isPlaying == true) {
+                startSeekBar()
+                startReels()
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+
+            musicService = null
+
+            isBound = false
+        }
+    }
+
     private fun observeSong() {
 
-        musicViewModel.selectedSong.observe(viewLifecycleOwner) { song ->
-            currentSong = song
-            // selección manual: reiniciar shuffle
+        musicViewModel.selectedSong.removeObservers(viewLifecycleOwner)
 
-            if (isManualSelection) {
-                if (isShuffleEnabled) {
-                    refillShuffleQueue()
-                }
-                isManualSelection = false
+        musicViewModel.selectedSong.observe(viewLifecycleOwner) { song ->
+
+            if (song == null) return@observe
+
+            val songs =
+                musicViewModel.songsList.value ?: return@observe
+
+            val selectedIndex =
+                songs.indexOfFirst { it.path == song.path }
+
+            if (selectedIndex != -1) {
+                musicViewModel.currentIndex = selectedIndex
             }
+
+            if (musicService?.currentSong?.path == song.path) {
+
+                updatePlayerUI()
+
+                if (musicService?.isPlaying == true) {
+                    startSeekBar()
+                    startReels()
+                }
+
+                return@observe
+            }
+
+            isManualSelection = true
+
+            if (musicService?.isShuffleEnabled == true) {
+                refillShuffleQueue()
+            }
+
             loadSelectedSong(song)
         }
     }
 
     private fun loadSelectedSong(song: Song) {
 
-        mediaPlayer?.release()
+        musicService?.loadSong(song)
 
-        mediaPlayer = MediaPlayer().apply {
+        txtTitle.text = song.title
 
-            setDataSource(song.path)
-
-            prepare()
+        musicService?.mediaPlayer?.setOnCompletionListener {
+            handleSongCompletion()
         }
-
-        updatePlayerUI()
 
         pendingSeek = 0
 
-        mediaPlayer?.setOnCompletionListener {
-
-            handleSongCompletion()
-        }
+        updatePlayerUI()
 
         playMusic()
     }
@@ -259,14 +329,12 @@ class PlayerFragment : Fragment() {
         val nextSong =
             songs[musicViewModel.currentIndex]
 
-        currentSong = nextSong
-
         loadSelectedSong(nextSong)
     }
 
     private fun handlePreviousSong() {
 
-        val player = mediaPlayer ?: return
+        val player = musicService?.mediaPlayer ?: return
 
         // Si lleva más de 3 segundos: reiniciar canción actual
 
@@ -281,7 +349,7 @@ class PlayerFragment : Fragment() {
         // SHUFFLE: volver a canciones reproducidas
 
 
-        if (isShuffleEnabled) {
+        if (musicService?.isShuffleEnabled == true) {
 
             if (playbackHistory.isEmpty()) return
 
@@ -298,8 +366,6 @@ class PlayerFragment : Fragment() {
 
             val previousSong =
                 songs[previousIndex]
-
-            currentSong = previousSong
 
             loadSelectedSong(previousSong)
 
@@ -319,7 +385,7 @@ class PlayerFragment : Fragment() {
         if (musicViewModel.currentIndex == 0) {
 
             val loopEnabled =
-                playbackMode == PlaybackMode.REPEAT_ALL
+                musicService?.playbackMode == PlaybackMode.REPEAT_ALL
 
             // sin loop: quedarse en primera canción
 
@@ -343,35 +409,30 @@ class PlayerFragment : Fragment() {
         val previousSong =
             songs[musicViewModel.currentIndex]
 
-        currentSong = previousSong
-
         loadSelectedSong(previousSong)
     }
 
     private fun handleSongCompletion() {
-        isPlaying = false
-
         btnPlayMusic.setImageResource(
             android.R.drawable.ic_media_play
         )
-
-        when(playbackMode) {
+        when (musicService?.playbackMode ?: PlaybackMode.OFF) {
             PlaybackMode.OFF -> {
-                if (isShuffleEnabled) {
+                if (musicService?.isShuffleEnabled == true) {
                     playRandomSong()
                 } else {
                     playNextSongWithoutLoop()
                 }
             }
             PlaybackMode.REPEAT_ALL -> {
-                if (isShuffleEnabled) {
+                if (musicService?.isShuffleEnabled == true) {
                     playRandomSong()
                 } else {
                     playNextSong()
                 }
             }
             PlaybackMode.REPEAT_ONE -> {
-                currentSong?.let {
+                musicService?.currentSong?.let {
                     loadSelectedSong(it)
                 }
             }
@@ -392,7 +453,7 @@ class PlayerFragment : Fragment() {
 
         if (shuffleQueue.isEmpty()) {
 
-            when(playbackMode) {
+            when(musicService?.playbackMode) {
 
                 PlaybackMode.OFF -> {
 
@@ -429,8 +490,6 @@ class PlayerFragment : Fragment() {
         val randomSong =
             songs[randomIndex]
 
-        currentSong = randomSong
-
         loadSelectedSong(randomSong)
     }
 
@@ -449,7 +508,7 @@ class PlayerFragment : Fragment() {
 
 
         val nextIndex =
-            shuffleQueue.first()
+            shuffleQueue.removeAt(0)
 
         musicViewModel.currentIndex =
             nextIndex
@@ -457,16 +516,7 @@ class PlayerFragment : Fragment() {
         val nextSong =
             songs[nextIndex]
 
-        currentSong = nextSong
-
-        mediaPlayer?.release()
-
-        mediaPlayer = MediaPlayer().apply {
-
-            setDataSource(nextSong.path)
-
-            prepare()
-        }
+        musicService?.loadSong(nextSong)
 
         updatePlayerUI()
 
@@ -475,8 +525,6 @@ class PlayerFragment : Fragment() {
         cassetteView.setProgress(0f)
 
         cassetteView.invalidate()
-
-        isPlaying = false
 
         btnPlayMusic.setImageResource(
             android.R.drawable.ic_media_play
@@ -505,8 +553,6 @@ class PlayerFragment : Fragment() {
                 val firstSong =
                     songs[musicViewModel.currentIndex]
 
-                currentSong = firstSong
-
                 loadSelectedSong(firstSong)
 
                 return
@@ -519,21 +565,13 @@ class PlayerFragment : Fragment() {
             val firstSong =
                 songs[musicViewModel.currentIndex]
 
-            currentSong = firstSong
-            mediaPlayer?.release()
-            mediaPlayer = MediaPlayer().apply {
-
-                setDataSource(firstSong.path)
-
-                prepare()
-            }
+            musicService?.loadSong(firstSong)
 
             updatePlayerUI()
 
             pendingSeek = 0
             cassetteView.setProgress(0f)
             cassetteView.invalidate()
-            isPlaying = false
 
             stopSeekBar()
 
@@ -548,7 +586,6 @@ class PlayerFragment : Fragment() {
         musicViewModel.currentIndex++
         val nextSong =
             songs[musicViewModel.currentIndex]
-        currentSong = nextSong
         loadSelectedSong(nextSong)
     }
 
@@ -565,17 +602,11 @@ class PlayerFragment : Fragment() {
         }
         val nextSong =
             songs[musicViewModel.currentIndex]
-        currentSong = nextSong
-        mediaPlayer?.release()
-        mediaPlayer = MediaPlayer().apply {
-            setDataSource(nextSong.path)
-            prepare()
-        }
+        musicService?.loadSong(nextSong)
         updatePlayerUI()
         pendingSeek = 0
         cassetteView.setProgress(0f)
         cassetteView.invalidate()
-        isPlaying = false
         btnPlayMusic.setImageResource(
             android.R.drawable.ic_media_play
         )
@@ -600,22 +631,13 @@ class PlayerFragment : Fragment() {
     }
 
     private fun playMusic() {
-
-        mediaPlayer?.start()
-
-        isPlaying = true
-
+        musicService?.play()
         updatePlayerUI()
-
-        stopSeekBar()
-        startSeekBar()
-
         startReels()
     }
 
     private fun pauseMusic() {
-        mediaPlayer?.pause()
-        isPlaying = false
+        musicService?.pause()
         updatePlayerUI()
         stopSeekBar()
         stopReels()
@@ -627,27 +649,49 @@ class PlayerFragment : Fragment() {
     }
 
     private fun startSeekBar() {
-        val player = mediaPlayer ?: return
 
-        seekBar.max = player.duration
-
-        // mostrar duración total
-        txtDuration.text = formatTime(player.duration)
+        stopSeekBar()
 
         updateRunnable = object : Runnable {
-            override fun run() {
-                if (player.isPlaying) {
-                    val current = player.currentPosition
-                    val progress = current.toFloat() / player.duration
-                    cassetteView.setProgress(progress)
-                    cassetteView.updateRotation()
 
-                    seekBar.progress = current
-                    txtCurrentTime.text = formatTime(current)
+            override fun run() {
+                val player =
+                    musicService?.mediaPlayer
+                // fragment destruido o player inválido
+                if (
+                    !isAdded ||
+                    view == null ||
+                    player == null
+                ) {
+                    return
                 }
-                handler.postDelayed(this, 16)
+
+                try {
+
+                    if (player.isPlaying) {
+                        val duration = player.duration
+                        if (duration > 0) {
+                            val current =
+                                player.currentPosition
+
+                            val progress =
+                                current.toFloat() / duration
+                            cassetteView.setProgress(progress)
+                            cassetteView.updateRotation()
+                            seekBar.progress = current
+                            txtCurrentTime.text =
+                                formatTime(current)
+                        }
+                    }
+                    handler.postDelayed(this, 16)
+
+                } catch (_: IllegalStateException) {
+
+                    // player destruido mientras corría el runnable
+                }
             }
         }
+
         handler.post(updateRunnable!!)
     }
 
@@ -667,8 +711,12 @@ class PlayerFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        mediaPlayer?.release()
         stopSeekBar()
+        stopReels()
+        if (isBound) {
+            requireActivity().unbindService(serviceConnection)
+            isBound = false
+        }
     }
 
     private fun dpToPx(dp: Int): Int {
@@ -676,9 +724,10 @@ class PlayerFragment : Fragment() {
     }
 
     private fun updatePlayerUI() {
-        val player = mediaPlayer ?: return
+        val player =
+            musicService?.mediaPlayer ?: return
         txtTitle.text =
-            currentSong?.title ?: "NO TAPE"
+            musicService?.currentSong?.title ?: "NO TAPE"
         seekBar.max = player.duration
         txtDuration.text =
             formatTime(player.duration)
@@ -686,63 +735,100 @@ class PlayerFragment : Fragment() {
             formatTime(player.currentPosition)
         seekBar.progress =
             player.currentPosition
-        if (isPlaying) {
+        if (musicService?.isPlaying == true) {
             btnPlayMusic.setImageResource(
                 android.R.drawable.ic_media_pause
             )
+            startSeekBar()
+
         } else {
             btnPlayMusic.setImageResource(
                 android.R.drawable.ic_media_play
             )
+            stopSeekBar()
         }
+        updatePlaybackModeUI()
+        updateShuffleUI()
     }
 
     private fun updatePlaybackModeUI() {
-        when(playbackMode) {PlaybackMode.OFF -> {
+
+        when (musicService?.playbackMode) {
+
+            PlaybackMode.OFF -> {
+
                 btnPlaybackMode.setImageResource(
                     R.drawable.ic_drepeat
                 )
-            btnPlaybackMode.setColorFilter(
-                android.graphics.Color.GRAY
-            )
-            btnPlaybackMode.scaleX = 1f
-            btnPlaybackMode.scaleY = 1f
+
+                btnPlaybackMode.setColorFilter(
+                    android.graphics.Color.GRAY
+                )
+
+                btnPlaybackMode.scaleX = 1f
+                btnPlaybackMode.scaleY = 1f
             }
+
             PlaybackMode.REPEAT_ALL -> {
+
                 btnPlaybackMode.setImageResource(
                     R.drawable.ic_repeat
                 )
+
                 btnPlaybackMode.setColorFilter(
                     android.graphics.Color.WHITE
                 )
+
                 btnPlaybackMode.scaleX = 1.15f
                 btnPlaybackMode.scaleY = 1.15f
             }
+
             PlaybackMode.REPEAT_ONE -> {
+
                 btnPlaybackMode.setImageResource(
                     R.drawable.ic_repeatb
                 )
+
                 btnPlaybackMode.setColorFilter(
                     android.graphics.Color.WHITE
                 )
+
                 btnPlaybackMode.scaleX = 1.15f
                 btnPlaybackMode.scaleY = 1.15f
             }
+
             PlaybackMode.STOP_AFTER -> {
+
                 btnPlaybackMode.setImageResource(
                     R.drawable.ic_endqueue
                 )
+
                 btnPlaybackMode.setColorFilter(
                     android.graphics.Color.WHITE
                 )
+
                 btnPlaybackMode.scaleX = 1.15f
                 btnPlaybackMode.scaleY = 1.15f
+            }
+
+            null -> {
+
+                btnPlaybackMode.setImageResource(
+                    R.drawable.ic_drepeat
+                )
+
+                btnPlaybackMode.setColorFilter(
+                    android.graphics.Color.GRAY
+                )
+
+                btnPlaybackMode.scaleX = 1f
+                btnPlaybackMode.scaleY = 1f
             }
         }
     }
 
     private fun updateShuffleUI() {
-        if (isShuffleEnabled) {
+        if (musicService?.isShuffleEnabled == true) {
             btnShuffle.setColorFilter(
                 android.graphics.Color.WHITE
             )
