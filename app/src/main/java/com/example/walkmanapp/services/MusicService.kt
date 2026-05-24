@@ -11,7 +11,9 @@ import android.os.IBinder
 import com.example.walkmanapp.models.Song
 import com.example.walkmanapp.models.PlaybackMode
 import android.app.Notification
+import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat.MediaStyle
 import com.example.walkmanapp.R
 
 class MusicService : Service() {
@@ -34,6 +36,10 @@ class MusicService : Service() {
     var isShuffleEnabled = false
 
     var currentSongIndex = 0
+
+    var onNextRequested: (() -> Unit)? = null
+
+    var onPreviousRequested: (() -> Unit)? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -61,6 +67,8 @@ class MusicService : Service() {
 
             prepare()
         }
+
+        refreshNotification()
     }
 
     fun play() {
@@ -74,6 +82,8 @@ class MusicService : Service() {
                 buildNotification()
             )
         }
+
+        refreshNotification()
     }
 
     fun pause() {
@@ -94,6 +104,8 @@ class MusicService : Service() {
                 buildNotification()
             )
         }
+
+        refreshNotification()
     }
 
     fun seekTo(position: Int) {
@@ -122,17 +134,109 @@ class MusicService : Service() {
 
     private fun buildNotification(): Notification {
 
+        val playPauseIntent =
+            Intent(this, MusicService::class.java).apply {
+
+                action = ACTION_PLAY_PAUSE
+            }
+
+        val nextIntent =
+            Intent(this, MusicService::class.java).apply {
+
+                action = ACTION_NEXT
+            }
+
+        val previousIntent =
+            Intent(this, MusicService::class.java).apply {
+
+                action = ACTION_PREVIOUS
+            }
+
+        val playPausePendingIntent =
+            PendingIntent.getService(
+                this,
+                0,
+                playPauseIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                        PendingIntent.FLAG_IMMUTABLE
+            )
+
+        val nextPendingIntent =
+            PendingIntent.getService(
+                this,
+                1,
+                nextIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                        PendingIntent.FLAG_IMMUTABLE
+            )
+
+        val previousPendingIntent =
+            PendingIntent.getService(
+                this,
+                2,
+                previousIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                        PendingIntent.FLAG_IMMUTABLE
+            )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(currentSong?.title ?: "Walkman")
+            .setSmallIcon(R.drawable.ic_note)
+
+            .setContentTitle(
+                currentSong?.title ?: "Walkman"
+            )
+
             .setContentText(
                 if (isPlaying)
                     "Reproduciendo música"
                 else
                     "Música en pausa"
             )
-            .setSmallIcon(R.drawable.ic_note)
+
             .setOngoing(isPlaying)
+
+            .addAction(
+                R.drawable.ic_skip_previous,
+                "Anterior",
+                previousPendingIntent
+            )
+
+            .addAction(
+                if (isPlaying)
+                    R.drawable.ic_pause
+                else
+                    R.drawable.ic_play,
+                if (isPlaying)
+                    "Pausa"
+                else
+                    "Play",
+
+                playPausePendingIntent
+            )
+
+            .addAction(
+                R.drawable.ic_skip_next,
+                "Siguiente",
+                nextPendingIntent
+            )
+
+            .setStyle(
+                MediaStyle()
+                    .setShowActionsInCompactView(0, 1, 2)
+            )
+
             .build()
+    }
+
+    private fun refreshNotification() {
+
+        val notificationManager =
+            getSystemService(NotificationManager::class.java)
+
+        notificationManager.notify(
+            1,
+            buildNotification()
+        )
     }
 
     private fun createNotificationChannel() {
@@ -150,6 +254,43 @@ class MusicService : Service() {
 
             manager.createNotificationChannel(channel)
         }
+    }
+
+    companion object {
+
+        const val ACTION_PLAY_PAUSE =
+            "ACTION_PLAY_PAUSE"
+
+        const val ACTION_NEXT =
+            "ACTION_NEXT"
+
+        const val ACTION_PREVIOUS =
+            "ACTION_PREVIOUS"
+    }
+
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
+
+        when(intent?.action) {
+            ACTION_PLAY_PAUSE -> {
+                if (isPlaying) {
+                    pause()
+                } else {
+                    play()
+                }
+            }
+
+            ACTION_NEXT -> {
+                onNextRequested?.invoke()
+            }
+            ACTION_PREVIOUS -> {
+                onPreviousRequested?.invoke()
+            }
+        }
+        return START_STICKY
     }
 
     override fun onDestroy() {

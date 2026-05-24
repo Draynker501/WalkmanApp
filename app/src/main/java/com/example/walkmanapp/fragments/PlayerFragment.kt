@@ -241,6 +241,22 @@ class PlayerFragment : Fragment() {
                 startSeekBar()
                 startReels()
             }
+
+            musicService?.onNextRequested = {
+                requireActivity().runOnUiThread {
+                    if (musicService?.isShuffleEnabled == true) {
+                        playRandomSong(true)
+                    } else {
+                        playNextSong(true)
+                    }
+                }
+            }
+
+            musicService?.onPreviousRequested = {
+                requireActivity().runOnUiThread {
+                    handlePreviousSong()
+                }
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
