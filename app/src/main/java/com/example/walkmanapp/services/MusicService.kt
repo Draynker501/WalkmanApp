@@ -41,7 +41,6 @@ class MusicService : Service() {
         private set
 
     var isPlaying = false
-        private set
 
     var playbackMode = PlaybackMode.OFF
 
@@ -52,6 +51,14 @@ class MusicService : Service() {
     var onNextRequested: (() -> Unit)? = null
 
     var onPreviousRequested: (() -> Unit)? = null
+
+    private var cachedArtwork: Bitmap? = null
+
+    var onSongCompleted: (() -> Unit)? = null
+
+    var onPlaybackStateChanged: (() -> Unit)? = null
+
+    var onSongChanged: (() -> Unit)? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -100,6 +107,13 @@ class MusicService : Service() {
 
         currentSong = song
 
+        cachedArtwork =
+            getAlbumArt(song.path)
+
+        onSongChanged?.invoke()
+
+        handler.removeCallbacks(notificationRunnable)
+
         mediaPlayer?.release()
 
         mediaPlayer = MediaPlayer().apply {
@@ -107,6 +121,10 @@ class MusicService : Service() {
             setDataSource(song.path)
 
             prepare()
+
+            setOnCompletionListener {
+                onSongCompleted?.invoke()
+            }
         }
 
         updateMediaSession()
@@ -119,7 +137,11 @@ class MusicService : Service() {
                 it.start()
             }
             isPlaying = true
+
+            onPlaybackStateChanged?.invoke()
+            updatePlaybackState()
             updateMediaSession()
+
             startForeground(
                 1,
                 buildNotification()
@@ -139,6 +161,9 @@ class MusicService : Service() {
                 it.pause()
             }
             isPlaying = false
+
+            onPlaybackStateChanged?.invoke()
+            updatePlaybackState()
             updateMediaSession()
             val notificationManager =
                 getSystemService(NotificationManager::class.java)
@@ -255,12 +280,7 @@ class MusicService : Service() {
 
     private fun getArtworkOrDefault(): Bitmap {
 
-        val artwork =
-            currentSong?.path?.let {
-                getAlbumArt(it)
-            }
-
-        return artwork
+        return cachedArtwork
             ?: BitmapFactory.decodeResource(
                 resources,
                 R.drawable.walkman_background
@@ -275,37 +295,40 @@ class MusicService : Service() {
         val duration =
             mediaPlayer?.duration ?: 0
 
-        val expandedView =
-            RemoteViews(
-                packageName,
-                R.layout.notification_expanded
+        val openIntent =
+            packageManager.getLaunchIntentForPackage(packageName)
+
+        val contentPendingIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                        PendingIntent.FLAG_IMMUTABLE
             )
-        expandedView.setTextViewText(
-            R.id.txtSong,
-            currentSong?.title ?: "Unknown"
-        )
-        expandedView.setImageViewResource(
-            R.id.btnPlay,
-            if (isPlaying)
-                R.drawable.ic_pause
-            else
-                R.drawable.ic_play
-        )
-        expandedView.setTextViewText(
-            R.id.txtArtist,
-            "Unknown Artist"
-        )
-        expandedView.setProgressBar(
-            R.id.progressBar,
-            duration,
-            currentPosition,
-            false
-        )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
+
             .setSmallIcon(R.drawable.ic_note)
-            .setOngoing(isPlaying)
+
+            .setContentTitle(currentSong?.title ?: "Walkman")
+            .setContentText(currentSong?.artist ?: "")
+
+            .setLargeIcon(getArtworkOrDefault())
+
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+
+            .setSilent(true)
+
             .setOnlyAlertOnce(true)
+
+            .setOngoing(isPlaying)
+
+            .setForegroundServiceBehavior(
+                NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
+            )
 
             .addAction(
                 R.drawable.ic_skip_previous,
@@ -340,12 +363,15 @@ class MusicService : Service() {
                 )
             )
 
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-
             .setStyle(
                 MediaStyle()
                     .setMediaSession(mediaSession.sessionToken)
+                    .setShowActionsInCompactView(0, 1, 2)
             )
+
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
+            .setContentIntent(contentPendingIntent)
 
             .build()
     }
@@ -370,7 +396,7 @@ class MusicService : Service() {
             }
         }
 
-    private fun updatePlaybackState() {
+    fun updatePlaybackState() {
 
         val state =
             if (isPlaying)
@@ -397,7 +423,7 @@ class MusicService : Service() {
         mediaSession.setPlaybackState(playbackState)
     }
 
-    private fun refreshNotification() {
+    fun refreshNotification() {
 
         val manager =
             getSystemService(NotificationManager::class.java)
@@ -415,7 +441,7 @@ class MusicService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Walkman Playback",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             )
 
             val manager =
@@ -471,6 +497,18 @@ class MusicService : Service() {
         val seconds = totalSeconds % 60
 
         return String.format("%02d:%02d", minutes, seconds)
+    }
+
+    fun setPlayingState(playing: Boolean) {
+
+        isPlaying = playing
+
+        onPlaybackStateChanged?.invoke()
+        updatePlaybackState()
+
+        updateMediaSession()
+
+        refreshNotification()
     }
 
     override fun onDestroy() {
