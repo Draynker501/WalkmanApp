@@ -14,6 +14,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.os.Handler
 import android.os.Looper
@@ -23,8 +24,12 @@ import androidx.media.app.NotificationCompat.MediaStyle
 import com.example.walkmanapp.R
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import android.widget.RemoteViews
 import androidx.media.session.MediaButtonReceiver
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 
 class MusicService : Service() {
 
@@ -60,6 +65,72 @@ class MusicService : Service() {
 
     var onSongChanged: (() -> Unit)? = null
 
+    private lateinit var audioManager: AudioManager
+
+    private var audioFocusRequest: AudioFocusRequest? = null
+
+    private var shouldResumeOnFocusGain = false
+
+    private val audioFocusChangeListener =
+        AudioManager.OnAudioFocusChangeListener { focusChange ->
+
+            when (focusChange) {
+
+                AudioManager.AUDIOFOCUS_LOSS -> {
+
+                    shouldResumeOnFocusGain = false
+                    pause()
+                }
+
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+
+                    shouldResumeOnFocusGain = true
+                    pauseTemporary()
+                }
+
+                AudioManager.AUDIOFOCUS_GAIN -> {
+
+                    if (shouldResumeOnFocusGain) {
+                        shouldResumeOnFocusGain = false
+                        resumePlayback()
+                    }
+                }
+            }
+        }
+
+    private val noisyReceiver =
+        object : BroadcastReceiver() {
+
+            override fun onReceive(
+                context: Context?,
+                intent: Intent?
+            ) {
+
+                if (intent?.action ==
+                    AudioManager.ACTION_AUDIO_BECOMING_NOISY
+                ) {
+
+                    pause()
+                }
+            }
+        }
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val notificationRunnable =
+        object : Runnable {
+
+            override fun run() {
+
+                if (isPlaying) {
+
+                    updatePlaybackState()
+
+                    handler.postDelayed(this, 1000)
+                }
+            }
+        }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -93,6 +164,34 @@ class MusicService : Service() {
         )
 
         mediaSession.isActive = true
+
+        audioManager =
+            getSystemService(AUDIO_SERVICE) as AudioManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+            audioFocusRequest =
+                AudioFocusRequest.Builder(
+                    AudioManager.AUDIOFOCUS_GAIN
+                )
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build()
+                    )
+                    .setOnAudioFocusChangeListener(
+                        audioFocusChangeListener
+                    )
+                    .build()
+        }
+
+        registerReceiver(
+            noisyReceiver,
+            IntentFilter(
+                AudioManager.ACTION_AUDIO_BECOMING_NOISY
+            )
+        )
     }
 
     inner class MusicBinder : Binder() {
@@ -132,25 +231,33 @@ class MusicService : Service() {
     }
 
     fun play() {
-        mediaPlayer?.let {
-            if (!it.isPlaying) {
-                it.start()
+
+        val focusResult =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+                audioManager.requestAudioFocus(
+                    audioFocusRequest!!
+                )
+
+            } else {
+
+                audioManager.requestAudioFocus(
+                    audioFocusChangeListener,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN
+                )
             }
-            isPlaying = true
 
-            onPlaybackStateChanged?.invoke()
-            updatePlaybackState()
-            updateMediaSession()
-
-            startForeground(
-                1,
-                buildNotification()
-            )
+        if (focusResult != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            return
         }
 
-        handler.post(notificationRunnable)
+        resumePlayback()
 
-        refreshNotification()
+        startForeground(
+            1,
+            buildNotification()
+        )
     }
 
     fun pause() {
@@ -160,11 +267,28 @@ class MusicService : Service() {
             if (it.isPlaying) {
                 it.pause()
             }
+
             isPlaying = false
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+                audioFocusRequest?.let {
+                    audioManager.abandonAudioFocusRequest(it)
+                }
+
+            } else {
+
+                audioManager.abandonAudioFocus(
+                    audioFocusChangeListener
+                )
+            }
+
             onPlaybackStateChanged?.invoke()
+
             updatePlaybackState()
+
             updateMediaSession()
+
             val notificationManager =
                 getSystemService(NotificationManager::class.java)
 
@@ -177,6 +301,50 @@ class MusicService : Service() {
         handler.removeCallbacks(notificationRunnable)
 
         refreshNotification()
+    }
+
+    private fun resumePlayback() {
+
+        mediaPlayer?.let {
+
+            if (!it.isPlaying) {
+                it.start()
+            }
+
+            isPlaying = true
+
+            onPlaybackStateChanged?.invoke()
+
+            updatePlaybackState()
+
+            updateMediaSession()
+
+            handler.post(notificationRunnable)
+
+            refreshNotification()
+        }
+    }
+
+    private fun pauseTemporary() {
+
+        mediaPlayer?.let {
+
+            if (it.isPlaying) {
+                it.pause()
+            }
+
+            isPlaying = false
+
+            onPlaybackStateChanged?.invoke()
+
+            updatePlaybackState()
+
+            updateMediaSession()
+
+            refreshNotification()
+        }
+
+        handler.removeCallbacks(notificationRunnable)
     }
 
     fun seekTo(position: Int) {
@@ -308,28 +476,9 @@ class MusicService : Service() {
             )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-
             .setSmallIcon(R.drawable.ic_note)
-
-            .setContentTitle(currentSong?.title ?: "Walkman")
-            .setContentText(currentSong?.artist ?: "")
-
-            .setLargeIcon(getArtworkOrDefault())
-
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-
-            .setSilent(true)
-
-            .setOnlyAlertOnce(true)
-
             .setOngoing(isPlaying)
-
-            .setForegroundServiceBehavior(
-                NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
-            )
-
+            .setOnlyAlertOnce(true)
             .addAction(
                 R.drawable.ic_skip_previous,
                 "Previous",
@@ -338,7 +487,6 @@ class MusicService : Service() {
                     PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
                 )
             )
-
             .addAction(
                 if (isPlaying)
                     R.drawable.ic_pause
@@ -353,7 +501,6 @@ class MusicService : Service() {
                         PlaybackStateCompat.ACTION_PLAY
                 )
             )
-
             .addAction(
                 R.drawable.ic_skip_next,
                 "Next",
@@ -362,39 +509,15 @@ class MusicService : Service() {
                     PlaybackStateCompat.ACTION_SKIP_TO_NEXT
                 )
             )
-
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setStyle(
                 MediaStyle()
                     .setMediaSession(mediaSession.sessionToken)
                     .setShowActionsInCompactView(0, 1, 2)
             )
-
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-
             .setContentIntent(contentPendingIntent)
-
             .build()
     }
-
-
-
-    private val handler = Handler(Looper.getMainLooper())
-
-    private val notificationRunnable =
-        object : Runnable {
-
-            override fun run() {
-
-                if (isPlaying) {
-
-                    updatePlaybackState()
-
-                    refreshNotification()
-
-                    handler.postDelayed(this, 1000)
-                }
-            }
-        }
 
     fun updatePlaybackState() {
 
@@ -488,17 +611,6 @@ class MusicService : Service() {
         return START_STICKY
     }
 
-    private fun formatTime(ms: Int): String {
-
-        val totalSeconds = ms / 1000
-
-        val minutes = totalSeconds / 60
-
-        val seconds = totalSeconds % 60
-
-        return String.format("%02d:%02d", minutes, seconds)
-    }
-
     fun setPlayingState(playing: Boolean) {
 
         isPlaying = playing
@@ -514,6 +626,8 @@ class MusicService : Service() {
     override fun onDestroy() {
 
         super.onDestroy()
+
+        unregisterReceiver(noisyReceiver)
 
         handler.removeCallbacks(notificationRunnable)
 
