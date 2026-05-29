@@ -24,39 +24,42 @@
 
     class PlayerFragment : Fragment() {
         private lateinit var btnPlayMusic: ImageButton
+
         private lateinit var btnBack: ImageButton
+
         private lateinit var btnForward: ImageButton
+
         private lateinit var btnModeRecord: Button
 
         private lateinit var seekBar: SeekBar
+
         private lateinit var txtTitle: TextView
 
-
         private val handler = Handler(Looper.getMainLooper())
+
         private var updateRunnable: Runnable? = null
+
         private var animLeft: ObjectAnimator? = null
+
         private var animRight: ObjectAnimator? = null
+
         private lateinit var txtCurrentTime: TextView
+
         private lateinit var txtDuration: TextView
+
         private lateinit var cassetteView: CassetteView
+
         private lateinit var btnModeMusic: Button
+
         private var lastProgress = 0
 
         private var pendingSeek = 0
 
         private lateinit var musicViewModel: MusicViewModel
 
-
-
         private lateinit var btnPlaybackMode: ImageButton
 
         private lateinit var btnShuffle: ImageButton
-
-
-
-        private val playbackHistory = mutableListOf<Int>()
-
-        private val shuffleQueue = mutableListOf<Int>()
 
         private var isManualSelection = false
 
@@ -66,7 +69,7 @@
 
         private var cachedDuration = 0
 
-        private var handlingCompletion = false
+        private var isUserSeeking = false
 
         override fun onCreateView(
             inflater: LayoutInflater,
@@ -103,15 +106,11 @@
             }
 
             btnBack.setOnClickListener {
-                handlePreviousSong()
+                musicService?.playPreviousSong()
             }
 
             btnForward.setOnClickListener {
-                if (musicService?.isShuffleEnabled == true) {
-                    playRandomSong(true)
-                } else {
-                    playNextSong(true)
-                }
+                musicService?.playNextSong(true)
             }
 
             btnModeRecord.setOnClickListener {
@@ -123,10 +122,6 @@
                     if (fromUser) {
 
                         pendingSeek = progress
-
-                        if (musicService?.isPlaying == true) {
-                            musicService?.mediaPlayer?.seekTo(progress)
-                        }
 
                         txtCurrentTime.text = formatTime(progress)
 
@@ -146,11 +141,17 @@
                         lastProgress = progress
                     }
                 }
-                override fun onStartTrackingTouch(sb: SeekBar?) {}
-                override fun onStopTrackingTouch(sb: SeekBar?) {}
+                override fun onStartTrackingTouch(sb: SeekBar?) {
+                    isUserSeeking = true
+                }
+
+                override fun onStopTrackingTouch(sb: SeekBar?) {
+                    isUserSeeking = false
+                    musicService?.seekTo(pendingSeek)
+                }
             })
 
-            // Simular que ESTE está presionado (porque estás en MusicActivity)
+            // Simular que el botón lateral está presionado (porque estás en PlayerFragment o MainActivity)
             btnModeMusic.post {
                 btnModeMusic.animate()
                     .translationX(-25f) // se mete hacia adentro
@@ -176,12 +177,6 @@
                     musicService?.isShuffleEnabled ?: false
 
                 musicService?.isShuffleEnabled = !enabled
-
-                if (musicService?.isShuffleEnabled == true) {
-                    refillShuffleQueue()
-                } else {
-                    shuffleQueue.clear()
-                }
 
                 updateShuffleUI()
             }
@@ -230,10 +225,12 @@
                     binder.getService()
 
                 musicService?.onSongCompleted = {
+
                     activity?.runOnUiThread {
 
                         if (!isAdded) return@runOnUiThread
-                        handleSongCompletion()
+
+                        updatePlayerUI()
                     }
                 }
 
@@ -288,11 +285,7 @@
 
                         if (!isAdded) return@runOnUiThread
 
-                        if (musicService?.isShuffleEnabled == true) {
-                            playRandomSong(true)
-                        } else {
-                            playNextSong(true)
-                        }
+                        musicService?.playNextSong(true)
                     }
                 }
 
@@ -301,7 +294,7 @@
                     activity?.runOnUiThread {
 
                         if (!isAdded) return@runOnUiThread
-                        handlePreviousSong()
+                        musicService?.playPreviousSong()
                     }
                 }
             }
@@ -346,373 +339,26 @@
 
                 isManualSelection = true
 
-                if (musicService?.isShuffleEnabled == true) {
-                    refillShuffleQueue()
-                }
-
                 loadSelectedSong(song)
             }
         }
 
         private fun loadSelectedSong(song: Song) {
 
+            val songs =
+                musicViewModel.songsList.value ?: return
+
+            val selectedIndex =
+                songs.indexOf(song)
+
+            musicService?.setPlaylist(
+                songs,
+                selectedIndex
+            )
+
             musicService?.loadSong(song)
 
-            txtTitle.text = song.title
-
-            pendingSeek = 0
-
-            updatePlayerUI()
-
-            playMusic()
-        }
-
-        private fun playNextSong(isManualSkip: Boolean = false) {
-
-            val songs =
-                musicViewModel.songsList.value ?: return
-
-            if (songs.isEmpty()) return
-
-            addToHistory(
-                musicViewModel.currentIndex
-            )
-
-            musicViewModel.currentIndex++
-
-            if (musicViewModel.currentIndex >= songs.size) {
-
-                musicViewModel.currentIndex = 0
-            }
-
-            val nextSong =
-                songs[musicViewModel.currentIndex]
-
-            loadSelectedSong(nextSong)
-        }
-
-        private fun handlePreviousSong() {
-
-            val player = musicService?.mediaPlayer ?: return
-
-            // Si lleva más de 3 segundos: reiniciar canción actual
-
-
-            if (player.currentPosition > 3000) {
-
-                player.seekTo(0)
-
-                return
-            }
-
-            // SHUFFLE: volver a canciones reproducidas
-
-
-            if (musicService?.isShuffleEnabled == true) {
-
-                if (playbackHistory.isEmpty()) return
-
-                val previousIndex =
-                    playbackHistory.removeAt(
-                        playbackHistory.lastIndex
-                    )
-
-                musicViewModel.currentIndex =
-                    previousIndex
-
-                val songs =
-                    musicViewModel.songsList.value ?: return
-
-                val previousSong =
-                    songs[previousIndex]
-
-                loadSelectedSong(previousSong)
-
-                return
-            }
-
-            //NORMAL: canción anterior por índice
-
-            val songs =
-                musicViewModel.songsList.value ?: return
-
-            if (songs.isEmpty()) return
-
-            // Si estamos en la primera canción
-
-
-            if (musicViewModel.currentIndex == 0) {
-
-                val loopEnabled =
-                    musicService?.playbackMode == PlaybackMode.REPEAT_ALL
-
-                // sin loop: quedarse en primera canción
-
-                if (!loopEnabled) {
-
-                    player.seekTo(0)
-
-                    return
-                }
-
-                // ir a la última
-
-                musicViewModel.currentIndex =
-                    songs.lastIndex
-
-            } else {
-
-                musicViewModel.currentIndex--
-            }
-
-            val previousSong =
-                songs[musicViewModel.currentIndex]
-
-            loadSelectedSong(previousSong)
-        }
-
-        private fun handleSongCompletion() {
-
-            if (handlingCompletion) return
-
-            handlingCompletion = true
-
-            handler.post {
-
-                btnPlayMusic.setImageResource(
-                    android.R.drawable.ic_media_play
-                )
-
-                when (musicService?.playbackMode ?: PlaybackMode.OFF) {
-
-                    PlaybackMode.OFF -> {
-
-                        if (musicService?.isShuffleEnabled == true) {
-                            playRandomSong()
-                        } else {
-                            playNextSongWithoutLoop()
-                        }
-                    }
-
-                    PlaybackMode.REPEAT_ALL -> {
-
-                        if (musicService?.isShuffleEnabled == true) {
-                            playRandomSong()
-                        } else {
-                            playNextSong()
-                        }
-                    }
-
-                    PlaybackMode.REPEAT_ONE -> {
-
-                        musicService?.currentSong?.let {
-                            loadSelectedSong(it)
-                        }
-                    }
-
-                    PlaybackMode.STOP_AFTER -> {
-
-                        prepareNextSongPaused()
-                    }
-                }
-
-                handlingCompletion = false
-            }
-        }
-
-        private fun playRandomSong(isManualSkip: Boolean = false) {
-
-            val songs =
-                musicViewModel.songsList.value ?: return
-
-            if (songs.isEmpty()) return
-
-            // si ya no quedan canciones
-
-            if (shuffleQueue.isEmpty()) {
-
-                when(musicService?.playbackMode) {
-
-                    PlaybackMode.OFF -> {
-
-                        if (isManualSkip) {
-                            refillShuffleQueue()
-                        } else {
-                            prepareFirstShuffleSongPaused()
-
-                            return
-                        }
-                    }
-
-                    PlaybackMode.REPEAT_ALL -> {
-                        refillShuffleQueue()
-                    }
-                    else -> {
-                        refillShuffleQueue()
-                    }
-                }
-            }
-
-            // sacar siguiente canción random
-
-            val randomIndex =
-                shuffleQueue.removeAt(0)
-
-            addToHistory(
-                musicViewModel.currentIndex
-            )
-
-            musicViewModel.currentIndex =
-                randomIndex
-
-            val randomSong =
-                songs[randomIndex]
-
-            loadSelectedSong(randomSong)
-        }
-
-        private fun prepareFirstShuffleSongPaused() {
-
-            val songs =
-                musicViewModel.songsList.value ?: return
-
-            if (songs.isEmpty()) return
-
-            // crear nueva cola shuffle
-
-            refillShuffleQueue()
-
-            // tomar PRIMER canción de la cola
-
-
-            val nextIndex =
-                shuffleQueue.removeAt(0)
-
-            musicViewModel.currentIndex =
-                nextIndex
-
-            val nextSong =
-                songs[nextIndex]
-
-            musicService?.loadSong(nextSong)
-            musicService?.setPlayingState(false)
-            musicService?.updatePlaybackState()
-            musicService?.refreshNotification()
-
-            updatePlayerUI()
-
-            pendingSeek = 0
-
-            cassetteView.setProgress(0f)
-
-
-            cassetteView.invalidate()
-
-            btnPlayMusic.setImageResource(
-                android.R.drawable.ic_media_play
-            )
-
-            stopSeekBar()
-
-            stopReels()
-        }
-
-        private fun addToHistory(index: Int) {
-
-            playbackHistory.add(index)
-        }
-
-        private fun playNextSongWithoutLoop(isManualSkip: Boolean = false) {
-            val songs =
-                musicViewModel.songsList.value ?: return
-            if (songs.isEmpty()) return
-            if (musicViewModel.currentIndex >= songs.lastIndex) {
-
-                if (isManualSkip) {
-
-                    musicViewModel.currentIndex = 0
-
-                    val firstSong =
-                        songs[musicViewModel.currentIndex]
-
-                    loadSelectedSong(firstSong)
-
-                    return
-                }
-
-                // automático: preparar primera canción pausada
-
-                musicViewModel.currentIndex = 0
-
-                val firstSong =
-                    songs[musicViewModel.currentIndex]
-
-                musicService?.loadSong(firstSong)
-
-                updatePlayerUI()
-
-                pendingSeek = 0
-                cassetteView.setProgress(0f)
-                cassetteView.invalidate()
-
-                stopSeekBar()
-
-                stopReels()
-
-                return
-            }
-
-            addToHistory(
-                musicViewModel.currentIndex
-            )
-            musicViewModel.currentIndex++
-            val nextSong =
-                songs[musicViewModel.currentIndex]
-            loadSelectedSong(nextSong)
-        }
-
-        private fun prepareNextSongPaused() {
-            val songs =
-                musicViewModel.songsList.value ?: return
-            if (songs.isEmpty()) return
-            addToHistory(
-                musicViewModel.currentIndex
-            )
-            musicViewModel.currentIndex++
-            if (musicViewModel.currentIndex >= songs.size) {
-                musicViewModel.currentIndex = 0
-            }
-            val nextSong =
-                songs[musicViewModel.currentIndex]
-            musicService?.loadSong(nextSong)
-            musicService?.setPlayingState(false)
-            musicService?.updatePlaybackState()
-            musicService?.refreshNotification()
-            updatePlayerUI()
-            pendingSeek = 0
-            cassetteView.setProgress(0f)
-            cassetteView.invalidate()
-            btnPlayMusic.setImageResource(
-                android.R.drawable.ic_media_play
-            )
-            stopSeekBar()
-            stopReels()
-        }
-
-        private fun refillShuffleQueue() {
-            val songs =
-                musicViewModel.songsList.value ?: return
-
-            shuffleQueue.clear()
-            shuffleQueue.addAll(
-                songs.indices.shuffled()
-            )
-
-            // evitar que la canción actual salga inmediatamente otra vez
-
-            shuffleQueue.remove(
-                musicViewModel.currentIndex
-            )
+            musicService?.play()
         }
 
         private fun playMusic() {
@@ -761,11 +407,18 @@
 
                                 val progress =
                                     current.toFloat() / duration
-                                cassetteView.setProgress(progress)
-                                cassetteView.updateRotation()
-                                seekBar.progress = current
-                                txtCurrentTime.text =
-                                    formatTime(current)
+                                /*cassetteView.setProgress(progress)
+                                cassetteView.updateRotation()*/
+                                if (!isUserSeeking) {
+                                    seekBar.progress = current
+                                    txtCurrentTime.text =
+                                        formatTime(current)
+
+                                    // Actualizar el progreso de los reels solo cuando el usuario está moviendo la progress bar
+                                    // Revisar si me gusta así o lo vevuelvo a como era antes
+                                    cassetteView.setProgress(progress)
+                                    cassetteView.updateRotation()
+                                }
                             }
                         }
                         handler.postDelayed(this, 16)

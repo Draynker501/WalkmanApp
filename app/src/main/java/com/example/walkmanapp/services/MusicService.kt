@@ -53,6 +53,12 @@ class MusicService : Service() {
 
     var currentSongIndex = 0
 
+    private val playbackHistory = mutableListOf<Int>()
+
+    private val shuffleQueue = mutableListOf<Int>()
+
+    var songsList: List<Song> = emptyList()
+
     var onNextRequested: (() -> Unit)? = null
 
     var onPreviousRequested: (() -> Unit)? = null
@@ -222,12 +228,344 @@ class MusicService : Service() {
             prepare()
 
             setOnCompletionListener {
+
+                when (playbackMode) {
+
+                    PlaybackMode.REPEAT_ONE -> {
+
+                        seekTo(0)
+
+                        play()
+                    }
+
+                    PlaybackMode.STOP_AFTER -> {
+
+                        prepareNextSongPaused()
+                    }
+
+                    PlaybackMode.REPEAT_ALL -> {
+
+                        playNextSong(true)
+                    }
+
+                    PlaybackMode.OFF -> {
+
+                        if (isShuffleEnabled) {
+
+                            playRandomSong(false)
+
+                        } else {
+
+                            playNextSongWithoutLoop(false)
+                        }
+                    }
+                }
+
                 onSongCompleted?.invoke()
             }
         }
 
         updateMediaSession()
         refreshNotification()
+    }
+
+    fun setPlaylist(
+        songs: List<Song>,
+        startIndex: Int
+    ) {
+
+        songsList = songs
+        currentSongIndex = startIndex
+    }
+
+    private fun addToHistory(index: Int) {
+
+        playbackHistory.add(index)
+    }
+
+    private fun refillShuffleQueue() {
+
+        shuffleQueue.clear()
+
+        shuffleQueue.addAll(
+            songsList.indices.shuffled()
+        )
+
+        shuffleQueue.remove(currentSongIndex)
+    }
+
+    fun playNextSong(
+        isManualSkip: Boolean = false
+    ) {
+
+        if (songsList.isEmpty()) return
+
+        if (isShuffleEnabled) {
+
+            playRandomSong(isManualSkip)
+
+            return
+        }
+
+        when(playbackMode) {
+
+            PlaybackMode.OFF -> {
+
+                playNextSongWithoutLoop(isManualSkip)
+            }
+
+            PlaybackMode.STOP_AFTER -> {
+
+                if (isManualSkip) {
+
+                    addToHistory(currentSongIndex)
+
+                    currentSongIndex++
+
+                    if (currentSongIndex >= songsList.size) {
+                        currentSongIndex = 0
+                    }
+
+                    val nextSong =
+                        songsList[currentSongIndex]
+
+                    loadSong(nextSong)
+
+                    play()
+
+                } else {
+
+                    prepareNextSongPaused()
+                }
+            }
+
+            else -> {
+
+                addToHistory(currentSongIndex)
+
+                currentSongIndex++
+
+                if (currentSongIndex >= songsList.size) {
+
+                    currentSongIndex = 0
+                }
+
+                val nextSong =
+                    songsList[currentSongIndex]
+
+                loadSong(nextSong)
+
+                play()
+            }
+        }
+    }
+
+    private fun playNextSongWithoutLoop(isManualSkip: Boolean = false) {
+
+        if (songsList.isEmpty()) return
+
+        // última canción
+
+        if (currentSongIndex >= songsList.lastIndex) {
+
+            if (isManualSkip) {
+
+                currentSongIndex = 0
+
+                val firstSong =
+                    songsList[currentSongIndex]
+
+                loadSong(firstSong)
+
+                play()
+
+                return
+            }
+
+            // automático:
+            // preparar primera canción pausada
+
+            currentSongIndex = 0
+
+            val firstSong =
+                songsList[currentSongIndex]
+
+            loadSong(firstSong)
+
+            pause()
+
+            seekTo(0)
+
+            refreshNotification()
+
+            onPlaybackStateChanged?.invoke()
+
+            return
+        }
+
+        addToHistory(currentSongIndex)
+
+        currentSongIndex++
+
+        val nextSong =
+            songsList[currentSongIndex]
+
+        loadSong(nextSong)
+
+        play()
+    }
+
+    private fun prepareNextSongPaused() {
+
+        if (songsList.isEmpty()) return
+
+        addToHistory(currentSongIndex)
+
+        currentSongIndex++
+
+        if (currentSongIndex >= songsList.size) {
+
+            currentSongIndex = 0
+        }
+
+        val nextSong =
+            songsList[currentSongIndex]
+
+        loadSong(nextSong)
+
+        pause()
+
+        seekTo(0)
+
+        refreshNotification()
+
+        onPlaybackStateChanged?.invoke()
+    }
+
+    fun playPreviousSong() {
+
+        val player = mediaPlayer ?: return
+
+        if (player.currentPosition > 3000) {
+
+            seekTo(0)
+
+            return
+        }
+
+        if (isShuffleEnabled) {
+
+            if (playbackHistory.isEmpty()) return
+
+            currentSongIndex =
+                playbackHistory.removeAt(
+                    playbackHistory.lastIndex
+                )
+
+        } else {
+
+            currentSongIndex--
+
+            if (currentSongIndex < 0) {
+
+                currentSongIndex =
+                    if (playbackMode ==
+                        PlaybackMode.REPEAT_ALL
+                    ) {
+
+                        songsList.lastIndex
+
+                    } else {
+
+                        0
+                    }
+            }
+        }
+
+        val previousSong =
+            songsList[currentSongIndex]
+
+        loadSong(previousSong)
+
+        play()
+    }
+
+    private fun playRandomSong(isManualSkip: Boolean = false) {
+
+        if (songsList.isEmpty()) return
+
+        // si ya no quedan canciones
+
+        if (shuffleQueue.isEmpty()) {
+
+            when(playbackMode) {
+
+                PlaybackMode.OFF -> {
+
+                    if (isManualSkip) {
+
+                        refillShuffleQueue()
+
+                    } else {
+
+                        prepareFirstShuffleSongPaused()
+
+                        return
+                    }
+                }
+
+                PlaybackMode.REPEAT_ALL -> {
+
+                    refillShuffleQueue()
+                }
+
+                else -> {
+
+                    refillShuffleQueue()
+                }
+            }
+        }
+
+        val randomIndex =
+            shuffleQueue.removeAt(0)
+
+        addToHistory(currentSongIndex)
+
+        currentSongIndex =
+            randomIndex
+
+        val randomSong =
+            songsList[randomIndex]
+
+        loadSong(randomSong)
+
+        play()
+    }
+
+    private fun prepareFirstShuffleSongPaused() {
+
+        if (songsList.isEmpty()) return
+
+        refillShuffleQueue()
+
+        val nextIndex =
+            shuffleQueue.removeAt(0)
+
+        currentSongIndex =
+            nextIndex
+
+        val nextSong =
+            songsList[nextIndex]
+
+        loadSong(nextSong)
+
+        pause()
+
+        seekTo(0)
+
+        refreshNotification()
+
+        onPlaybackStateChanged?.invoke()
     }
 
     fun play() {
@@ -349,7 +687,15 @@ class MusicService : Service() {
 
     fun seekTo(position: Int) {
 
-        mediaPlayer?.seekTo(position)
+        val player = mediaPlayer ?: return
+
+        val safePosition =
+            if (position >= player.duration - 500)
+                player.duration - 500
+            else
+                position
+
+        player.seekTo(safePosition)
     }
 
     fun getCurrentPosition(): Int {
