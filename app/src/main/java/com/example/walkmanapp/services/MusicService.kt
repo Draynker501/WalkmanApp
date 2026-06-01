@@ -30,6 +30,7 @@ import android.media.AudioFocusRequest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
+import com.example.walkmanapp.activities.MainActivity
 
 class MusicService : Service() {
 
@@ -803,14 +804,15 @@ class MusicService : Service() {
 
     private fun buildNotification(): Notification {
 
-        val currentPosition =
-            mediaPlayer?.currentPosition ?: 0
-
-        val duration =
-            mediaPlayer?.duration ?: 0
-
         val openIntent =
-            packageManager.getLaunchIntentForPackage(packageName)
+            Intent(this, MainActivity::class.java).apply {
+
+                flags =
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP
+
+                putExtra("open_player", true)
+            }
 
         val contentPendingIntent =
             PendingIntent.getActivity(
@@ -957,26 +959,11 @@ class MusicService : Service() {
         return START_STICKY
     }
 
-    fun setPlayingState(playing: Boolean) {
-
-        isPlaying = playing
-
-        onPlaybackStateChanged?.invoke()
-        updatePlaybackState()
-
-        updateMediaSession()
-
-        refreshNotification()
-    }
-
     override fun onDestroy() {
-
         super.onDestroy()
-
         unregisterReceiver(noisyReceiver)
-
         handler.removeCallbacks(notificationRunnable)
-
+        mediaSession.release()
         releasePlayer()
     }
 }

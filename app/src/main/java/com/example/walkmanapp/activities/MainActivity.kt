@@ -10,10 +10,12 @@ import com.example.walkmanapp.R
 import com.example.walkmanapp.fragments.SongsFragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.media.session.MediaButtonReceiver.handleIntent
 
 private val REQUEST_AUDIO_PERMISSION = 100
 
@@ -22,6 +24,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        handleIntent(intent)
 
         checkAudioPermission()
 
@@ -79,6 +83,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+
+        val openPlayer =
+            intent?.getBooleanExtra(
+                "open_player",
+                false
+            ) ?: false
+
+        if (openPlayer) {
+
+            val bottomNav =
+                findViewById<BottomNavigationView>(
+                    R.id.bottomNavigation
+                )
+
+            bottomNav.selectedItemId =
+                R.id.nav_player
+        }
+    }
+
     // Solicitar permiso de audio
     private fun checkAudioPermission() {
 
@@ -118,7 +148,6 @@ class MainActivity : AppCompatActivity() {
 
     // Cambiar fragment
     private fun replaceFragment(fragment: Fragment) {
-
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, fragment)
             .commit()

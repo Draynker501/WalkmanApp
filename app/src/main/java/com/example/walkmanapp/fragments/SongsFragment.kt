@@ -7,6 +7,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.*
 import android.widget.EditText
+import android.widget.ImageButton
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -16,6 +17,8 @@ import com.example.walkmanapp.models.Song
 import androidx.lifecycle.ViewModelProvider
 import com.example.walkmanapp.viewmodels.MusicViewModel
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import kotlin.random.Random
+import java.text.Normalizer
 
 class SongsFragment : Fragment() {
 
@@ -28,6 +31,8 @@ class SongsFragment : Fragment() {
     private val filteredList = mutableListOf<Song>()
 
     private lateinit var musicViewModel: MusicViewModel
+
+    private lateinit var btnRandomSong: ImageButton
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -65,9 +70,34 @@ class SongsFragment : Fragment() {
                 .selectedItemId = R.id.nav_player
         }
 
+        btnRandomSong = view.findViewById(R.id.ibtnRandomSong)
+
         recyclerSongs.adapter = adapter
 
         setupSearch()
+
+        btnRandomSong.setOnClickListener {
+
+            if (songsList.isEmpty()) return@setOnClickListener
+
+            val randomIndex =
+                Random.nextInt(songsList.size)
+
+            val randomSong =
+                songsList[randomIndex]
+
+            musicViewModel.currentIndex =
+                randomIndex
+
+            musicViewModel.selectedSong.value =
+                randomSong
+
+            requireActivity()
+                .findViewById<BottomNavigationView>(
+                    R.id.bottomNavigation
+                )
+                .selectedItemId = R.id.nav_player
+        }
 
         return view
     }
@@ -157,15 +187,31 @@ class SongsFragment : Fragment() {
 
         } else {
 
+            val normalizedQuery =
+                normalizeText(query)
+
             val result = songsList.filter {
 
-                it.title.contains(query, true) ||
-                        it.artist.contains(query, true)
+                normalizeText(it.title)
+                    .contains(normalizedQuery) ||
+
+                        normalizeText(it.artist)
+                            .contains(normalizedQuery)
             }
 
             filteredList.addAll(result)
         }
 
         adapter.updateList(filteredList)
+    }
+
+    private fun normalizeText(text: String): String {
+
+        return Normalizer.normalize(
+            text,
+            Normalizer.Form.NFD
+        )
+            .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+            .lowercase()
     }
 }

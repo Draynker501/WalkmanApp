@@ -146,7 +146,7 @@
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:background="@drawable/bg_circle"
-        android:src="@drawable/ic_random"
+        android:src="@drawable/ic_shuffle"
         app:layout_constraintTop_toTopOf="@id/btnForward"
         app:layout_constraintStart_toEndOf="@id/btnForward"
         app:layout_constraintEnd_toEndOf="parent"/>

@@ -1,29 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#121212"
-    android:padding="12dp">
+    android:background="#121212">
 
-    <!-- Buscador -->
-    <EditText
-        android:id="@+id/searchSongs"
-        android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:hint="Buscar canción..."
-        android:textColor="#FFFFFF"
-        android:textColorHint="#AAAAAA"
-        android:background="#2A2A2A"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"/>
-
-    <!-- Lista -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerSongs"
+    <!-- Contenido principal -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginTop="12dp"/>
+        android:orientation="vertical"
+        android:padding="12dp">
 
-</LinearLayout>
+        <!-- Buscador -->
+        <EditText
+            android:id="@+id/searchSongs"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:hint="Buscar canción..."
+            android:textColor="#FFFFFF"
+            android:textColorHint="#AAAAAA"
+            android:background="#2A2A2A"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"/>
+
+        <!-- Lista -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerSongs"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="12dp"/>
+
+    </LinearLayout>
+
+    <!-- Botón flotante -->
+    <ImageButton
+        android:id="@+id/ibtnRandomSong"
+        android:layout_width="70dp"
+        android:layout_height="70dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="18dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/bg_circle"
+        android:backgroundTint="@color/walkman_yellow"
+        android:elevation="8dp"
+        android:padding="12dp"
+        android:src="@drawable/ic_random"/>
+
+</FrameLayout>

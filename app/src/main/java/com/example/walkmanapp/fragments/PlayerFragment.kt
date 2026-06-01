@@ -340,6 +340,8 @@
                 isManualSelection = true
 
                 loadSelectedSong(song)
+
+                musicViewModel.selectedSong.value = null
             }
         }
 
