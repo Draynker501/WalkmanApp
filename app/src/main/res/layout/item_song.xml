@@ -18,12 +18,11 @@
         android:textStyle="bold"/>
 
     <TextView
-        android:id="@+id/textArtist"
+        android:id="@+id/textSubtitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Artist"
+        android:text="Artist · 00:00"
         android:textColor="#BBBBBB"
         android:textSize="13sp"
         android:layout_marginTop="4dp"/>
-
 </LinearLayout>

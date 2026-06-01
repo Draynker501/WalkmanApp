@@ -109,7 +109,8 @@ class SongsFragment : Fragment() {
         val projection = arrayOf(
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DATA
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.DURATION
         )
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -133,16 +134,23 @@ class SongsFragment : Fragment() {
             val pathColumn =
                 it.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
+            val durationColumn =
+                it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+
             while (it.moveToNext()) {
 
                 val title = it.getString(titleColumn)
                 val artist = it.getString(artistColumn)
                 val path = it.getString(pathColumn)
+                val durationMs = it.getLong(durationColumn)
+
+                val duration = formatDuration(durationMs)
 
                 songsList.add(
                     Song(
                         title,
                         artist,
+                        duration,
                         path
                     )
                 )
@@ -150,6 +158,24 @@ class SongsFragment : Fragment() {
         }
 
         filteredList.addAll(songsList)
+    }
+
+    private fun formatDuration(durationMs: Long): String {
+
+        val totalSeconds =
+            durationMs / 1000
+
+        val minutes =
+            totalSeconds / 60
+
+        val seconds =
+            totalSeconds % 60
+
+        return String.format(
+            "%d:%02d",
+            minutes,
+            seconds
+        )
     }
 
     private fun setupSearch() {

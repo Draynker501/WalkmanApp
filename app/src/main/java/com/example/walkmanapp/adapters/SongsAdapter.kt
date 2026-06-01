@@ -16,7 +16,7 @@ class SongsAdapter(
     class SongViewHolder(view: View) : RecyclerView.ViewHolder(view) {
 
         val title: TextView = view.findViewById(R.id.textTitle)
-        val artist: TextView = view.findViewById(R.id.textArtist)
+        val subtitle: TextView = view.findViewById(R.id.textSubtitle)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder {
@@ -32,7 +32,7 @@ class SongsAdapter(
         val song = songs[position]
 
         holder.title.text = song.title
-        holder.artist.text = song.artist
+        holder.subtitle.text = "${song.artist} · ${song.duration}"
 
         holder.itemView.setOnClickListener {
             onSongClick(song)
