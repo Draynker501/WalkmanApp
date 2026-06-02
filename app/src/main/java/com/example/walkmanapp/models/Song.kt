@@ -5,9 +5,9 @@ import android.graphics.Bitmap
 data class Song(
     val title: String,
     val artist: String,
-    val album: String,
     val duration: String,
     val path: String,
+    val album: String = "Desconocido",
     val art: Bitmap? = null,
     var isFavorite: Boolean = false,
     var lyrics: String? = null,
@@ -15,5 +15,5 @@ data class Song(
     val genre: String = "Desconocido",
     var playCount: Int = 0,
     var lastPlayed: Long = 0L,
-    val dateAdded: Long
+    val dateAdded: Long = 0L
 )

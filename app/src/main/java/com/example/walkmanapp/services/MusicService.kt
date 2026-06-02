@@ -30,6 +30,7 @@ import android.media.AudioFocusRequest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
+import android.os.Bundle
 import com.example.walkmanapp.activities.MainActivity
 
 class MusicService : Service() {
@@ -147,6 +148,20 @@ class MusicService : Service() {
 
         mediaSession.setCallback(
             object : MediaSessionCompat.Callback() {
+
+                override fun onCustomAction(
+                    action: String?,
+                    extras: Bundle?
+                ) {
+                    when(action) {
+                        "favorite" -> {
+                            toggleFavorite()
+                        }
+                        "close" -> {
+                            stopPlaybackAndClose()
+                        }
+                    }
+                }
 
                 override fun onPlay() {
                     play()
@@ -699,6 +714,75 @@ class MusicService : Service() {
         player.seekTo(safePosition)
     }
 
+    private fun toggleFavorite() {
+
+        currentSong?.let { song ->
+
+            song.isFavorite = !song.isFavorite
+
+            updateMediaSession()
+            updatePlaybackState()
+            refreshNotification()
+
+            onSongChanged?.invoke()
+        }
+    }
+
+    private fun stopPlaybackAndClose() {
+
+        pause()
+
+        stopForeground(STOP_FOREGROUND_REMOVE)
+
+        stopSelf()
+    }
+
+    private fun buildPlaybackState(): PlaybackStateCompat {
+
+        val favoriteIcon =
+            if (currentSong?.isFavorite == true)
+                R.drawable.ic_fav
+            else
+                R.drawable.ic_unfav
+
+        val favoriteAction =
+            PlaybackStateCompat.CustomAction.Builder(
+                "favorite",
+                "Favorito",
+                favoriteIcon
+            ).build()
+
+        val closeAction =
+            PlaybackStateCompat.CustomAction.Builder(
+                "close",
+                "Cerrar",
+                R.drawable.ic_close
+            ).build()
+
+        val state =
+            if (isPlaying)
+                PlaybackStateCompat.STATE_PLAYING
+            else
+                PlaybackStateCompat.STATE_PAUSED
+
+        return PlaybackStateCompat.Builder()
+            .setActions(
+                PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_SEEK_TO
+            )
+            .addCustomAction(favoriteAction)
+            .addCustomAction(closeAction)
+            .setState(
+                state,
+                getCurrentPosition().toLong(),
+                1f
+            )
+            .build()
+    }
+
     fun getCurrentPosition(): Int {
 
         return mediaPlayer?.currentPosition ?: 0
@@ -719,30 +803,10 @@ class MusicService : Service() {
     }
 
     private fun updateMediaSession() {
-        val state =
-            if (isPlaying)
-                PlaybackStateCompat.STATE_PLAYING
-            else
-                PlaybackStateCompat.STATE_PAUSED
-
+        mediaSession.setPlaybackState(
+            buildPlaybackState()
+        )
         val artwork = getArtworkOrDefault()
-
-        val playbackState =
-            PlaybackStateCompat.Builder()
-                .setActions(
-                    PlaybackStateCompat.ACTION_PLAY or
-                            PlaybackStateCompat.ACTION_PAUSE or
-                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-                )
-                .setState(
-                    state,
-                    getCurrentPosition().toLong(),
-                    1f
-                )
-                .build()
-
-        mediaSession.setPlaybackState(playbackState)
         val metadata =
             MediaMetadataCompat.Builder()
                 .putString(
@@ -827,71 +891,19 @@ class MusicService : Service() {
             .setSmallIcon(R.drawable.ic_note)
             .setOngoing(isPlaying)
             .setOnlyAlertOnce(true)
-            .addAction(
-                R.drawable.ic_skip_previous,
-                "Previous",
-                MediaButtonReceiver.buildMediaButtonPendingIntent(
-                    this,
-                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-                )
-            )
-            .addAction(
-                if (isPlaying)
-                    R.drawable.ic_pause
-                else
-                    R.drawable.ic_play,
-                "Play",
-                MediaButtonReceiver.buildMediaButtonPendingIntent(
-                    this,
-                    if (isPlaying)
-                        PlaybackStateCompat.ACTION_PAUSE
-                    else
-                        PlaybackStateCompat.ACTION_PLAY
-                )
-            )
-            .addAction(
-                R.drawable.ic_skip_next,
-                "Next",
-                MediaButtonReceiver.buildMediaButtonPendingIntent(
-                    this,
-                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT
-                )
-            )
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setStyle(
                 MediaStyle()
                     .setMediaSession(mediaSession.sessionToken)
-                    .setShowActionsInCompactView(0, 1, 2)
             )
             .setContentIntent(contentPendingIntent)
             .build()
     }
 
     fun updatePlaybackState() {
-
-        val state =
-            if (isPlaying)
-                PlaybackStateCompat.STATE_PLAYING
-            else
-                PlaybackStateCompat.STATE_PAUSED
-
-        val playbackState =
-            PlaybackStateCompat.Builder()
-                .setActions(
-                    PlaybackStateCompat.ACTION_PLAY or
-                            PlaybackStateCompat.ACTION_PAUSE or
-                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                            PlaybackStateCompat.ACTION_SEEK_TO
-                )
-                .setState(
-                    state,
-                    getCurrentPosition().toLong(),
-                    1f
-                )
-                .build()
-
-        mediaSession.setPlaybackState(playbackState)
+        mediaSession.setPlaybackState(
+            buildPlaybackState()
+        )
     }
 
     fun refreshNotification() {
@@ -932,6 +944,9 @@ class MusicService : Service() {
 
         const val ACTION_PREVIOUS =
             "ACTION_PREVIOUS"
+
+        const val ACTION_CLOSE =
+            "ACTION_CLOSE"
     }
 
     override fun onStartCommand(
@@ -966,4 +981,13 @@ class MusicService : Service() {
         mediaSession.release()
         releasePlayer()
     }
+
+//     Metodo para cuando tenga funciones agregar favoritos, letras, contador de reproducciones, etc.,
+//     servira tenerlo centralizado
+//    private fun notifyStateChanged() {
+//        onPlaybackStateChanged?.invoke()
+//        onSongChanged?.invoke()
+//    }
+//    otra opción es StateFlow por la cantidad de estados que manejo (shuffle, repeat, etc)
+//    los callback sueltos empezarian a crecer rápido
 }
