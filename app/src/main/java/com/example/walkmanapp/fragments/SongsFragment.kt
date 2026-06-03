@@ -8,6 +8,9 @@ import android.text.TextWatcher
 import android.view.*
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.PopupMenu
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -15,8 +18,13 @@ import com.example.walkmanapp.R
 import com.example.walkmanapp.adapters.SongsAdapter
 import com.example.walkmanapp.models.Song
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import com.example.walkmanapp.DatabaseProvider
+import com.example.walkmanapp.models.PlaylistEntity
+import com.example.walkmanapp.models.PlaylistSongEntity
 import com.example.walkmanapp.viewmodels.MusicViewModel
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 import java.text.Normalizer
 
@@ -57,18 +65,30 @@ class SongsFragment : Fragment() {
 
         musicViewModel.songsList.value = songsList
 
-        adapter = SongsAdapter(filteredList) { song ->
+        adapter = SongsAdapter(
 
-            val index = songsList.indexOf(song)
+            filteredList,
 
-            musicViewModel.currentIndex = index
+            onSongClick = { song ->
 
-            musicViewModel.selectedSong.value = song
+                val index = songsList.indexOf(song)
 
-            requireActivity()
-                .findViewById<BottomNavigationView>(R.id.bottomNavigation)
-                .selectedItemId = R.id.nav_player
-        }
+                musicViewModel.currentIndex = index
+
+                musicViewModel.selectedSong.value = song
+
+                requireActivity()
+                    .findViewById<BottomNavigationView>(
+                        R.id.bottomNavigation
+                    )
+                    .selectedItemId = R.id.nav_player
+            },
+
+            onMenuClick = { song, anchorView ->
+
+                showSongMenu(song, anchorView)
+            }
+        )
 
         btnRandomSong = view.findViewById(R.id.ibtnRandomSong)
 
@@ -100,6 +120,99 @@ class SongsFragment : Fragment() {
         }
 
         return view
+    }
+
+    private fun showSongMenu(
+        song: Song,
+        anchorView: View
+    ) {
+
+        val popup = PopupMenu(
+            requireContext(),
+            anchorView
+        )
+
+        popup.menu.add("Agregar a playlist")
+
+        popup.setOnMenuItemClickListener {
+
+            when(it.title) {
+
+                "Agregar a playlist" -> {
+
+                    showPlaylistSelector(song)
+                }
+            }
+
+            true
+        }
+
+        popup.show()
+    }
+
+    private fun showPlaylistSelector(
+        song: Song
+    ) {
+
+        lifecycleScope.launch {
+
+            val db =
+                DatabaseProvider.getDatabase(
+                    requireContext()
+                )
+
+            val availablePlaylists =
+                db.playlistDao()
+                    .getAllPlaylists()
+                    .filter {
+                        !it.isSystem
+                    }
+
+            val playlistNames =
+                availablePlaylists
+                    .map { it.name }
+                    .toTypedArray()
+
+            AlertDialog.Builder(requireContext())
+                .setTitle("Agregar a playlist")
+                .setItems(playlistNames) { _, which ->
+
+                    addSongToPlaylist(
+                        song,
+                        availablePlaylists[which]
+                    )
+                }
+                .show()
+        }
+    }
+
+    private fun addSongToPlaylist(
+        song: Song,
+        playlist: PlaylistEntity
+    ) {
+
+        lifecycleScope.launch {
+
+            val db =
+                DatabaseProvider.getDatabase(
+                    requireContext()
+                )
+
+            db.playlistSongDao()
+                .addSong(
+
+                    PlaylistSongEntity(
+                        playlistId = playlist.id,
+                        songPath = song.path
+                    )
+                )
+
+            Toast.makeText(
+                requireContext(),
+                "${song.title} agregada a ${playlist.name}",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun loadSongs() {

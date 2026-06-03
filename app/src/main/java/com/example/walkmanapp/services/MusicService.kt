@@ -24,7 +24,6 @@ import androidx.media.app.NotificationCompat.MediaStyle
 import com.example.walkmanapp.R
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.PlaybackStateCompat
-import androidx.media.session.MediaButtonReceiver
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.content.BroadcastReceiver
@@ -32,6 +31,12 @@ import android.content.Context
 import android.content.IntentFilter
 import android.os.Bundle
 import com.example.walkmanapp.activities.MainActivity
+import com.example.walkmanapp.DatabaseProvider
+import com.example.walkmanapp.models.PlaylistSongEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MusicService : Service() {
 
@@ -227,6 +232,34 @@ class MusicService : Service() {
     fun loadSong(song: Song) {
 
         currentSong = song
+
+        CoroutineScope(Dispatchers.IO).launch {
+
+            val db =
+                DatabaseProvider.getDatabase(this@MusicService)
+
+            val favorites =
+                db.playlistDao()
+                    .getFavoritesPlaylist()
+
+            val isFavorite =
+                favorites != null &&
+                        db.playlistSongDao()
+                            .exists(
+                                favorites.id,
+                                song.path
+                            )
+
+            song.isFavorite = isFavorite
+
+            withContext(Dispatchers.Main) {
+
+                updateMediaSession()
+                refreshNotification()
+
+                onSongChanged?.invoke()
+            }
+        }
 
         cachedArtwork =
             getAlbumArt(song.path)
@@ -716,15 +749,60 @@ class MusicService : Service() {
 
     private fun toggleFavorite() {
 
-        currentSong?.let { song ->
+        val song = currentSong ?: return
 
-            song.isFavorite = !song.isFavorite
+        CoroutineScope(Dispatchers.IO).launch {
 
-            updateMediaSession()
-            updatePlaybackState()
-            refreshNotification()
+            val db =
+                DatabaseProvider.getDatabase(this@MusicService)
 
-            onSongChanged?.invoke()
+            val playlistDao =
+                db.playlistDao()
+
+            val playlistSongDao =
+                db.playlistSongDao()
+
+            val favorites =
+                playlistDao.getFavoritesPlaylist()
+                    ?: return@launch
+
+            val favoriteEntry =
+                PlaylistSongEntity(
+                    playlistId = favorites.id,
+                    songPath = song.path
+                )
+
+            val alreadyFavorite =
+                playlistSongDao.exists(
+                    favorites.id,
+                    song.path
+                )
+
+            if (alreadyFavorite) {
+
+                playlistSongDao.removeSong(
+                    favoriteEntry
+                )
+
+                song.isFavorite = false
+
+            } else {
+
+                playlistSongDao.addSong(
+                    favoriteEntry
+                )
+
+                song.isFavorite = true
+            }
+
+            withContext(Dispatchers.Main) {
+
+                updateMediaSession()
+                updatePlaybackState()
+                refreshNotification()
+
+                onSongChanged?.invoke()
+            }
         }
     }
 
@@ -944,9 +1022,6 @@ class MusicService : Service() {
 
         const val ACTION_PREVIOUS =
             "ACTION_PREVIOUS"
-
-        const val ACTION_CLOSE =
-            "ACTION_CLOSE"
     }
 
     override fun onStartCommand(

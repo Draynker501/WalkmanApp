@@ -3,6 +3,7 @@ package com.example.walkmanapp.adapters
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.walkmanapp.R
@@ -10,13 +11,16 @@ import com.example.walkmanapp.models.Song
 
 class SongsAdapter(
     private var songs: List<Song>,
-    private val onSongClick: (Song) -> Unit
+    private val onSongClick: (Song) -> Unit,
+    private val onMenuClick: (Song, View) -> Unit
 ) : RecyclerView.Adapter<SongsAdapter.SongViewHolder>() {
 
     class SongViewHolder(view: View) : RecyclerView.ViewHolder(view) {
 
         val title: TextView = view.findViewById(R.id.textTitle)
         val subtitle: TextView = view.findViewById(R.id.textSubtitle)
+
+        val btnSongMenu: ImageButton = view.findViewById(R.id.btnMenu)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder {
@@ -36,6 +40,14 @@ class SongsAdapter(
 
         holder.itemView.setOnClickListener {
             onSongClick(song)
+        }
+
+        holder.btnSongMenu.setOnClickListener {
+
+            onMenuClick(
+                song,
+                holder.btnSongMenu
+            )
         }
     }
 
